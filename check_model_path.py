@@ -91,7 +91,7 @@ def check_disk_space():
 
 def check_permissions():
     """检查文件权限"""
-    model_path = "models/ShowUI-2B"
+    model_path = "/models/ShowUI-2B"
     
     if not os.path.exists(model_path):
         return False
