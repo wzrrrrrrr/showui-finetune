@@ -56,6 +56,17 @@ echo "✅ 验证安装..."
 python -c "import torch; print(f'PyTorch版本: {torch.__version__}')"
 python -c "import torch; print(f'CUDA可用: {torch.cuda.is_available()}')"
 python -c "import torch; print(f'GPU数量: {torch.cuda.device_count()}')"
+
+# 检查本地模型路径
+echo "🔍 检查本地模型路径..."
+if [ -d "/models/ShowUI-2B" ]; then
+    echo "✅ 找到本地模型: /models/ShowUI-2B"
+    ls -la /models/ShowUI-2B/ | head -10
+else
+    echo "⚠️ 未找到本地模型路径: /models/ShowUI-2B"
+    echo "请确保模型已下载到正确位置"
+fi
+
 if [ $? -eq 0 ]; then
     echo "🎉 环境设置完成！"
 else

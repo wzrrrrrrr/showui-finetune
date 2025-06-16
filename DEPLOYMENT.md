@@ -59,7 +59,23 @@ source showui_env/bin/activate
 python test_environment.py
 ```
 
-### 5. 数据准备
+### 5. 模型准备
+
+```bash
+# 确保ShowUI-2B模型已下载到 /models 目录
+# 如果还没有，可以使用以下命令下载：
+mkdir -p /models
+cd /models
+git clone https://huggingface.co/showlab/ShowUI-2B
+
+# 或者从本地上传模型文件
+scp -r local_models/ShowUI-2B root@YOUR_SERVER_IP:/models/
+
+# 检查模型文件
+ls -la /models/ShowUI-2B/
+```
+
+### 6. 数据准备
 
 ```bash
 # 上传你的训练数据到 data/my_dataset/ 目录
@@ -73,7 +89,7 @@ ls data/my_dataset/
 head data/metadata.jsonl
 ```
 
-### 6. 开始训练
+### 7. 开始训练
 
 ```bash
 # 获取WandB API key: https://wandb.ai/authorize

@@ -18,13 +18,27 @@ cd showui-finetune
 source showui_env/bin/activate
 ```
 
-### 2. 数据准备
+### 2. 模型准备
+
+确保ShowUI-2B模型已下载到服务器的 `/models` 目录：
+
+```bash
+# 检查模型是否存在
+ls -la /models/ShowUI-2B/
+
+# 如果不存在，下载模型
+mkdir -p /models
+cd /models
+git clone https://huggingface.co/showlab/ShowUI-2B
+```
+
+### 3. 数据准备
 
 1. 将你的截图放入 `data/my_dataset/` 目录
 2. 编辑 `data/metadata.jsonl` 文件，添加训练数据
 3. 参考 `data/README.md` 了解数据格式
 
-### 3. 开始训练
+### 4. 开始训练
 
 ```bash
 # 获取你的WandB API key: https://wandb.ai/authorize

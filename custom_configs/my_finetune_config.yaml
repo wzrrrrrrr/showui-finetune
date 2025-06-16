@@ -3,6 +3,8 @@
 
 # 模型配置
 model_id: "showlab/ShowUI-2B"
+local_weight: true  # 使用本地模型权重
+local_weight_dir: "/models"  # 本地模型存储路径
 precision: "bf16"  # A10支持bf16，比fp16更稳定
 attn_imple: "flash_attention_2"  # 使用Flash Attention提升效率
 ds_zero: "zero2"  # ZeRO Stage 2适合单GPU训练

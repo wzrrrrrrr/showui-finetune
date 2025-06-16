@@ -19,3 +19,19 @@ env/
 *.safetensors
 *.bin
 *.pth
+
+# Local model files (should be stored separately)
+/models/
+models/
+
+# Temporary files
+temp_showui/
+*.tmp
+*.temp
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Training logs and monitoring
+wandb/
+tensorboard/

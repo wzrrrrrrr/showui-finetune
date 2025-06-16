@@ -72,31 +72,52 @@ def test_project_structure():
         "data",
         "custom_configs"
     ]
-    
+
     required_files = [
         "showui_core/train.py",
         "setup_env.sh",
         "run_training.sh",
         "data/metadata.jsonl"
     ]
-    
+
     all_good = True
-    
+
     for dir_path in required_dirs:
         if os.path.exists(dir_path):
             print(f"✅ 目录存在: {dir_path}")
         else:
             print(f"❌ 目录缺失: {dir_path}")
             all_good = False
-    
+
     for file_path in required_files:
         if os.path.exists(file_path):
             print(f"✅ 文件存在: {file_path}")
         else:
             print(f"❌ 文件缺失: {file_path}")
             all_good = False
-    
+
     return all_good
+
+def test_local_model():
+    """测试本地模型路径"""
+    model_path = "/models/ShowUI-2B"
+    if os.path.exists(model_path):
+        print(f"✅ 本地模型路径存在: {model_path}")
+
+        # 检查关键文件
+        key_files = ["config.json", "tokenizer.json", "preprocessor_config.json"]
+        for file_name in key_files:
+            file_path = os.path.join(model_path, file_name)
+            if os.path.exists(file_path):
+                print(f"✅ 模型文件存在: {file_name}")
+            else:
+                print(f"❌ 模型文件缺失: {file_name}")
+                return False
+        return True
+    else:
+        print(f"❌ 本地模型路径不存在: {model_path}")
+        print("💡 请确保模型已下载到 /models/ShowUI-2B 目录")
+        return False
 
 def main():
     """主测试函数"""
@@ -107,7 +128,8 @@ def main():
         ("PyTorch", test_pytorch),
         ("Transformers", test_transformers),
         ("其他依赖", test_other_dependencies),
-        ("项目结构", test_project_structure)
+        ("项目结构", test_project_structure),
+        ("本地模型", test_local_model)
     ]
     
     results = []

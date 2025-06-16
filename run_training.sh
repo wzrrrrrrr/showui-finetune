@@ -36,6 +36,8 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)/showui_core"
 TRAIN_ARGS="
     --wandb_key ${WANDB_KEY} \
     --model_id showlab/ShowUI-2B \
+    --local_weight \
+    --local_weight_dir /models \
     --precision bf16 \
     --ds_zero zero2 \
     --attn_imple flash_attention_2 \
