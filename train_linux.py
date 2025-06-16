@@ -139,7 +139,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description="ShowUI训练 - Linux/CUDA版本")
     
     # 基础参数
-    parser.add_argument("--wandb_key", default=None, type=str, help="wandb密钥")
     parser.add_argument("--precision", default="bf16", type=str, choices=["fp32", "bf16", "fp16"])
     parser.add_argument("--use_qlora", action="store_true", default=True)
     parser.add_argument("--load_in_4bit", action="store_true", default=True)
