@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+env/
+
+# IDE & OS files
+.idea/
+.vscode/
+*.DS_Store
+
+# Project Output
+/output/
+/logs/
+/data/  # 建议不上传原始数据，而是通过其他方式上传到服务器
+*.safetensors
+*.bin
+*.pth
