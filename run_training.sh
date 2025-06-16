@@ -1,24 +1,16 @@
 #!/bin/bash
 
 # ShowUI-2B 微调训练脚本 - 适用于阿里云A10 GPU
-# 使用方法: ./run_training.sh [wandb_key]
+# 使用方法: ./run_training.sh
 
 set -e  # 遇到错误立即退出
 
-# 检查参数
-if [ $# -eq 0 ]; then
-    echo "❌ 请提供wandb key作为参数"
-    echo "使用方法: ./run_training.sh YOUR_WANDB_KEY"
-    exit 1
-fi
-
-WANDB_KEY=$1
+# 生成实验ID
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 EXP_ID="showui_2b_finetune_${TIMESTAMP}"
 
 echo "🚀 开始ShowUI-2B微调训练..."
 echo "📅 实验ID: ${EXP_ID}"
-echo "🔑 WandB Key: ${WANDB_KEY}"
 
 # 激活虚拟环境
 echo "🐍 激活虚拟环境..."
@@ -34,7 +26,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)/showui_core"
 
 # 训练参数
 TRAIN_ARGS="
-    --wandb_key ${WANDB_KEY} \
+
     --model_id showlab/ShowUI-2B \
     --local_weight \
     --local_weight_dir /models \

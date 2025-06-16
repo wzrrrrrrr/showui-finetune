@@ -1,22 +1,16 @@
 #!/bin/bash
 
 # ShowUI-2B macOS微调训练脚本
-# 使用方法: ./run_macos_training.sh [wandb_key]
+# 使用方法: ./run_macos_training.sh
 
 set -e  # 遇到错误立即退出
 
-# 检查参数
-WANDB_KEY=${1:-""}
+# 生成实验ID
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 EXP_ID="showui_macos_${TIMESTAMP}"
 
 echo "🚀 开始ShowUI-2B微调训练 (macOS版本)..."
 echo "📅 实验ID: ${EXP_ID}"
-if [ -n "$WANDB_KEY" ]; then
-    echo "🔑 WandB Key: ${WANDB_KEY}"
-else
-    echo "⚠️ 未提供WandB Key，将不会上传训练日志"
-fi
 
 # 激活虚拟环境
 echo "🐍 激活虚拟环境..."
@@ -52,12 +46,7 @@ fi
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 # 训练参数
-TRAIN_ARGS=""
-if [ -n "$WANDB_KEY" ]; then
-    TRAIN_ARGS="$TRAIN_ARGS --wandb_key $WANDB_KEY"
-fi
-
-TRAIN_ARGS="$TRAIN_ARGS \
+TRAIN_ARGS="\
     --model_id showlab/ShowUI-2B \
     --local_weight \
     --local_weight_dir ./models \

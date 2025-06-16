@@ -64,11 +64,7 @@ python test_linux_env.py
 ### 5. 开始训练
 
 ```bash
-# 不使用wandb
 ./run_linux_training.sh
-
-# 使用wandb监控
-./run_linux_training.sh your_wandb_key
 ```
 
 ## ⚙️ 配置说明
@@ -112,14 +108,7 @@ DeepSpeed配置在 `ds_config.json` 中：
 - GPU内存使用
 - 训练速度
 
-### 2. WandB监控
-
-如果提供了wandb_key，可以在WandB网站查看：
-- 损失曲线
-- 学习率变化
-- 系统资源使用
-
-### 3. 日志文件
+### 2. 日志文件
 
 训练日志保存在 `./logs/showui_linux_YYYYMMDD_HHMMSS/`
 

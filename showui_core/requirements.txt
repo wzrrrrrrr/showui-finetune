@@ -19,6 +19,6 @@ transformers>=4.47.0
 qwen-vl-utils
 scikit-learn
 nltk
-wandb
+
 openai
 vllm

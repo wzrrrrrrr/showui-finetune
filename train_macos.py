@@ -8,7 +8,7 @@ import argparse
 import os
 import sys
 import json
-import wandb
+
 from datetime import datetime
 import torch
 import torch.nn as nn
@@ -127,7 +127,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="ShowUI训练 - macOS兼容版本")
     
     # 基础参数
-    parser.add_argument("--wandb_key", default=None, type=str, help="wandb密钥")
+
     parser.add_argument("--precision", default="fp16", type=str, choices=["fp32", "bf16", "fp16"])
     parser.add_argument("--use_qlora", action="store_true", default=True)
     parser.add_argument("--load_in_4bit", action="store_true", default=True)
@@ -300,13 +300,7 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, args, epoch, gl
                 'step': f'{global_step}'
             })
 
-            # 记录到wandb
-            if step % args.print_freq == 0 and args.wandb_key:
-                wandb.log({
-                    "train/loss": loss.item() * args.grad_accumulation_steps,
-                    "train/learning_rate": scheduler.get_last_lr()[0],
-                    "train/step": global_step
-                })
+
 
         except Exception as e:
             print(f"⚠️ 训练步骤出错: {e}")
@@ -321,14 +315,7 @@ def main():
     print(f"📱 模型: {args.model_id}")
     print(f"🎯 实验: {args.exp_id}")
     
-    # 设置wandb
-    if args.wandb_key:
-        wandb.login(key=args.wandb_key)
-        wandb.init(
-            project="ShowUI-macOS",
-            name=f"{args.exp_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            config=args
-        )
+
     
     # 设置模型和处理器
     model, processor, device = setup_model_and_processor(args)
@@ -357,12 +344,7 @@ def main():
         avg_loss, global_step = train_epoch(model, dataloader, optimizer, scheduler, device, args, epoch, global_step)
         print(f"Epoch {epoch+1}/{args.epochs} - 平均损失: {avg_loss:.4f} - 总步数: {global_step}")
 
-        # 记录epoch指标
-        if args.wandb_key:
-            wandb.log({
-                "train/epoch_loss": avg_loss,
-                "train/epoch": epoch + 1
-            })
+
 
         # 如果达到最大步数，提前结束
         if args.max_steps and global_step >= args.max_steps:

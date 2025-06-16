@@ -8,7 +8,7 @@ import argparse
 import os
 import sys
 import json
-import wandb
+
 from datetime import datetime
 import torch
 import torch.nn as nn
@@ -278,14 +278,7 @@ def main():
     print(f"📱 模型: {args.model_id}")
     print(f"🎯 实验: {args.exp_id}")
     
-    # 设置wandb
-    if args.wandb_key:
-        wandb.login(key=args.wandb_key)
-        wandb.init(
-            project="ShowUI-Linux",
-            name=f"{args.exp_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            config=args
-        )
+
     
     # 设置模型和处理器
     model, processor, device = setup_model_and_processor(args)
@@ -361,12 +354,7 @@ def main():
                     'step': f'{global_step}'
                 })
                 
-                # 记录到wandb
-                if step % args.print_freq == 0 and args.wandb_key:
-                    wandb.log({
-                        "train/loss": loss.item(),
-                        "train/step": global_step
-                    })
+
                     
             except Exception as e:
                 print(f"⚠️ 训练步骤出错: {e}")

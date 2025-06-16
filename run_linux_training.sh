@@ -2,22 +2,16 @@
 
 # ShowUI-2B 阿里云Linux微调训练脚本
 # 适用于 NVIDIA A10 GPU
-# 使用方法: ./run_linux_training.sh [wandb_key]
+# 使用方法: ./run_linux_training.sh
 
 set -e  # 遇到错误立即退出
 
-# 检查参数
-WANDB_KEY=${1:-""}
+# 生成实验ID
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 EXP_ID="showui_linux_${TIMESTAMP}"
 
 echo "🚀 开始ShowUI-2B微调训练 (阿里云Linux版本)..."
 echo "📅 实验ID: ${EXP_ID}"
-if [ -n "$WANDB_KEY" ]; then
-    echo "🔑 WandB Key: ${WANDB_KEY}"
-else
-    echo "⚠️ 未提供WandB Key，将不会上传训练日志"
-fi
 
 # 激活虚拟环境
 echo "🐍 激活虚拟环境..."
@@ -61,12 +55,7 @@ export NCCL_DEBUG=INFO
 export NCCL_SOCKET_IFNAME=eth0
 
 # 训练参数
-TRAIN_ARGS=""
-if [ -n "$WANDB_KEY" ]; then
-    TRAIN_ARGS="$TRAIN_ARGS --wandb_key $WANDB_KEY"
-fi
-
-TRAIN_ARGS="$TRAIN_ARGS \
+TRAIN_ARGS="\
     --model_id showlab/ShowUI-2B \
     --local_weight \
     --local_weight_dir ./models \
