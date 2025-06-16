@@ -86,7 +86,7 @@ scp -r local_data/* root@YOUR_SERVER_IP:/path/to/showui-finetune/data/my_dataset
 
 # 检查数据
 ls data/my_dataset/
-head data/metadata.jsonl
+head data/my_dataset/metadata.json
 ```
 
 ### 7. 开始训练
@@ -167,7 +167,7 @@ tail -f logs/showui_2b_finetune_*/tensorboard/events.out.tfevents.*
 cat > backup_training.sh << 'EOF'
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
-tar -czf backup_${DATE}.tar.gz logs/ output/ data/metadata.jsonl
+tar -czf backup_${DATE}.tar.gz logs/ output/ data/my_dataset/metadata.json
 echo "备份完成: backup_${DATE}.tar.gz"
 EOF
 

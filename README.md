@@ -35,7 +35,7 @@ git clone https://huggingface.co/showlab/ShowUI-2B
 ### 3. 数据准备
 
 1. 将你的截图放入 `data/my_dataset/` 目录
-2. 编辑 `data/metadata.jsonl` 文件，添加训练数据
+2. 编辑 `data/my_dataset/metadata.json` 文件，添加训练数据
 3. 参考 `data/README.md` 了解数据格式
 
 ### 4. 开始训练
@@ -57,7 +57,7 @@ showui-finetune/
 │
 ├── data/                         # 数据目录
 │   ├── README.md                 # 数据格式说明
-│   ├── metadata.jsonl            # 训练数据元数据
+│   ├── metadata.json            # 训练数据元数据
 │   └── my_dataset/               # 存放训练图片
 │
 ├── showui_core/                  # ShowUI核心代码

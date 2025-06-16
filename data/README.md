@@ -4,7 +4,7 @@
 ```
 data/
 ├── README.md           # 本说明文件
-├── metadata.jsonl      # 数据集元数据文件
+├── metadata.json      # 数据集元数据文件
 └── my_dataset/         # 存放训练图片的目录
     ├── example1.png
     ├── example2.png
@@ -13,7 +13,7 @@ data/
 
 ## 数据格式说明
 
-### metadata.jsonl 格式
+### metadata.json 格式
 每行是一个JSON对象，包含以下字段：
 - `image`: 图片相对路径
 - `conversations`: 对话列表，包含human和gpt的交互
@@ -44,7 +44,7 @@ data/
 ## 数据准备步骤
 
 1. 将你的截图放入 `my_dataset/` 目录
-2. 根据上述格式编辑 `metadata.jsonl` 文件
+2. 根据上述格式编辑 `metadata.json` 文件
 3. 确保图片路径和文件名匹配
 4. 运行训练脚本开始微调
 

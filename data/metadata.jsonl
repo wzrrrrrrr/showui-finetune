@@ -1,3 +1,0 @@
-{"image": "my_dataset/example1.png", "conversations": [{"from": "human", "value": "<image>\n请点击登录按钮"}, {"from": "gpt", "value": "我会帮您点击登录按钮。<click>320, 450</click>"}]}
-{"image": "my_dataset/example2.png", "conversations": [{"from": "human", "value": "<image>\n请滚动到页面底部"}, {"from": "gpt", "value": "我会帮您滚动到页面底部。<scroll>0, 1000</scroll>"}]}
-{"image": "my_dataset/example3.png", "conversations": [{"from": "human", "value": "<image>\n请在搜索框中输入'ShowUI'"}, {"from": "gpt", "value": "我会在搜索框中输入'ShowUI'。<click>200, 100</click><type>ShowUI</type>"}]}

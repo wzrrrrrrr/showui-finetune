@@ -77,7 +77,7 @@ def test_project_structure():
         "showui_core/train.py",
         "setup_env.sh",
         "run_training.sh",
-        "data/metadata.jsonl"
+        "data/my_dataset/metadata.json"
     ]
 
     all_good = True

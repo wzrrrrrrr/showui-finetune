@@ -84,8 +84,14 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "flash-attn和liger-kernel主要用于CUDA环境"
 else
     # Linux with CUDA
-    pip install flash-attn --no-build-isolation
-    pip install liger-kernel
+    echo "🔥 安装DeepSpeed..."
+    pip install deepspeed
+
+    echo "⚡ 安装Flash Attention (可能需要较长时间)..."
+    pip install flash-attn --no-build-isolation || echo "⚠️ Flash Attention安装失败，继续..."
+
+    echo "🚀 安装Liger Kernel..."
+    pip install liger-kernel || echo "⚠️ Liger Kernel安装失败，继续..."
 fi
 
 # 验证安装

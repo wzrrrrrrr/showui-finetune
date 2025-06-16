@@ -49,9 +49,9 @@ TRAIN_ARGS="
     --lora_target_modules qkv_proj \
     --dataset_dir ./data \
     --train_dataset custom \
-    --train_json metadata.jsonl \
+    --train_json metadata.json \
     --val_dataset custom \
-    --val_json metadata.jsonl \
+    --val_json metadata.json \
     --batch_size 1 \
     --grad_accumulation_steps 8 \
     --lr 2e-4 \

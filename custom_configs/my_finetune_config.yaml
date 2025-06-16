@@ -28,9 +28,9 @@ steps_per_epoch: 500
 # 数据配置
 dataset_dir: "./data"
 train_dataset: "custom"  # 你的自定义数据集
-train_json: "metadata.jsonl"
+train_json: "metadata.json"
 val_dataset: "custom"
-val_json: "metadata.jsonl"
+val_json: "metadata.json"
 
 # 显存优化
 gradient_checkpointing: true  # 启用梯度检查点
