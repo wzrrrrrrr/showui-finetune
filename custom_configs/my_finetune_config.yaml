@@ -1,0 +1,46 @@
+# ShowUI-2B 微调配置 - 适用于阿里云 A10 GPU
+# 硬件规格: ecs.gn7i-c8g1.2xlarge (1x NVIDIA A10, 8 CPU cores, 30GB RAM)
+
+# 模型配置
+model_id: "showlab/ShowUI-2B"
+precision: "bf16"  # A10支持bf16，比fp16更稳定
+attn_imple: "flash_attention_2"  # 使用Flash Attention提升效率
+ds_zero: "zero2"  # ZeRO Stage 2适合单GPU训练
+
+# LoRA配置 - 适合显存受限的环境
+use_qlora: true  # 使用QLoRA减少显存占用
+load_in_4bit: true  # 4bit量化
+lora_r: 16  # LoRA rank，可根据需要调整
+lora_alpha: 32  # LoRA alpha
+lora_dropout: 0.1
+lora_target_modules: "qkv_proj"
+
+# 训练参数 - 针对A10优化
+batch_size: 1  # 单GPU批次大小
+grad_accumulation_steps: 8  # 梯度累积，有效批次大小为8
+learning_rate: 2e-4  # LoRA训练的学习率
+warmup_steps: 100
+epochs: 3  # 微调轮数
+steps_per_epoch: 500
+
+# 数据配置
+dataset_dir: "./data"
+train_dataset: "custom"  # 你的自定义数据集
+train_json: "metadata.jsonl"
+val_dataset: "custom"
+val_json: "metadata.jsonl"
+
+# 显存优化
+gradient_checkpointing: true  # 启用梯度检查点
+max_visual_tokens: 1024  # 减少视觉token数量
+model_max_length: 4096  # 减少最大序列长度
+
+# 输出配置
+log_base_dir: "./logs"
+exp_id: "showui_2b_finetune"
+print_freq: 10
+
+# 其他优化
+workers: 4  # 数据加载器工作进程数
+tune_visual_encoder: false  # 不微调视觉编码器以节省显存
+freeze_lm_embed: true  # 冻结语言模型嵌入层
