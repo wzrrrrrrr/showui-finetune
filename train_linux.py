@@ -175,7 +175,9 @@ def parse_args():
     parser.add_argument("--warmup_steps", default=100, type=int)
     parser.add_argument("--print_freq", default=10, type=int)
     parser.add_argument("--save_steps", default=500, type=int)
-    
+
+    parser.add_argument("--local_rank", type=int, default=-1, help="DeepSpeed injected argument for local rank.")
+
     return parser.parse_args()
 
 def setup_model_and_processor(args):
