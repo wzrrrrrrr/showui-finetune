@@ -10,7 +10,7 @@ import sys
 
 def check_model_files():
     """检查模型文件完整性"""
-    model_path = "/models/ShowUI-2B"
+    model_path = "models/ShowUI-2B"
     
     print(f"🔍 检查模型路径: {model_path}")
     
