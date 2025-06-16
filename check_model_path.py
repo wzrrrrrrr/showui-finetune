@@ -74,7 +74,7 @@ def check_disk_space():
     """检查磁盘空间"""
     try:
         import shutil
-        total, used, free = shutil.disk_usage("/models")
+        total, used, free = shutil.disk_usage("models")
         
         print(f"\n💾 磁盘空间信息:")
         print(f"   总空间: {total // (1024**3):.1f} GB")
