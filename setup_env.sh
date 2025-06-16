@@ -37,9 +37,15 @@ source showui_env/bin/activate
 echo "⬆️ 升级pip..."
 pip install --upgrade pip setuptools wheel
 
-# 安装PyTorch (CUDA 11.8版本，适合A10)
+# 安装PyTorch (macOS版本)
 echo "🔥 安装PyTorch..."
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    pip install torch torchvision torchaudio
+else
+    # Linux with CUDA
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+fi
 
 # 安装ShowUI核心依赖
 echo "📚 安装ShowUI依赖..."
