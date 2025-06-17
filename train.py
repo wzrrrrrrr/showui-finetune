@@ -194,7 +194,7 @@ def setup_model_and_processor(args):
         print(f"🔧 正在从本地路径 '{args.model_id}' 加载处理器...")
         processor = AutoProcessor.from_pretrained(
             args.model_id,  # <--- 关键修改！
-            size={"shortest_edge": 448, "longest_edge": self.max_pixels},
+            size={"shortest_edge": 448, "longest_edge": 448},
             trust_remote_code=True
         )
         print("✅ 处理器加载成功")
