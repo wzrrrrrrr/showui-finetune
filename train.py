@@ -194,6 +194,7 @@ def setup_model_and_processor(args):
         print(f"🔧 正在从本地路径 '{args.model_id}' 加载处理器...")
         processor = AutoProcessor.from_pretrained(
             args.model_id,  # <--- 关键修改！
+            size={"shortest_edge": 448, "longest_edge": self.max_pixels},
             trust_remote_code=True
         )
         print("✅ 处理器加载成功")
@@ -213,7 +214,8 @@ def setup_model_and_processor(args):
             device_map="auto",
             quantization_config=bnb_config,
             trust_remote_code=True,
-            low_cpu_mem_usage=True
+            low_cpu_mem_usage=True,
+            gradient_checkpointing_kwargs={'use_reentrant': False}
         )
             
         print("✅ 模型加载成功")
