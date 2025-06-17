@@ -1,5 +1,31 @@
 # ShowUI Fine-tuning 更新日志
 
+## 2025-06-16 - 项目精简化
+
+### 🗑️ 删除的文件
+- **macOS相关**: train_macos.py, run_macos_training.sh
+- **测试文件**: test_*.py, check_model_path.py
+- **多余文档**: DEPLOYMENT.md, custom_configs/
+- **重复依赖**: requirements.txt (保留Linux版本)
+
+### 📝 重命名的文件
+- `train_linux.py` → `train.py`
+- `run_linux_training.sh` → `run_training.sh`
+- `requirements_linux.txt` → `requirements.txt`
+- `README_LINUX.md` → `README.md`
+
+### ✅ 保留的核心文件
+- **train.py**: 主训练脚本
+- **run_training.sh**: 训练启动脚本
+- **setup_env.sh**: 环境配置脚本
+- **requirements.txt**: 依赖列表
+- **README.md**: 使用文档
+
+### 🎯 精简化目标
+- **专注Linux**: 只保留Linux/CUDA环境支持
+- **简化维护**: 减少重复代码和文件
+- **清晰结构**: 核心功能更加明确
+
 ## 2025-06-16 - DeepSpeed移除更新
 
 ### 🗑️ 移除的功能
