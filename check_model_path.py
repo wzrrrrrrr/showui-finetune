@@ -10,7 +10,7 @@ import sys
 
 def check_model_files():
     """检查模型文件完整性"""
-    model_path = "models/ShowUI-2B"
+    model_path = "showui-finetune/models/ShowUI-2B"
     
     print(f"🔍 检查模型路径: {model_path}")
     
@@ -91,7 +91,7 @@ def check_disk_space():
 
 def check_permissions():
     """检查文件权限"""
-    model_path = "/models/ShowUI-2B"
+    model_path = "showui-finetune/models/ShowUI-2B"
     
     if not os.path.exists(model_path):
         return False
@@ -134,7 +134,7 @@ def main():
         print("💡 运行 python test_environment.py 进行完整环境测试")
     else:
         print("❌ 模型路径验证失败，请检查上述问题。")
-        print("💡 确保模型已正确下载到 /models/ShowUI-2B 目录")
+        print("💡 确保模型已正确下载到 showui-finetune/models/ShowUI-2B 目录")
         sys.exit(1)
 
 if __name__ == "__main__":
