@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 阿里云Linux环境的ShowUI微调训练脚本
-支持NVIDIA A10 GPU + CUDA + DeepSpeed
+支持NVIDIA A10 GPU + CUDA，兼容peft和bitsandbytes
 """
 
 import argparse
@@ -20,7 +20,7 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import AutoProcessor, BitsAndBytesConfig
 from tqdm import tqdm
 from PIL import Image
-import deepspeed
+
 
 class ShowUIDataset(Dataset):
     """ShowUI数据集类"""
@@ -144,9 +144,7 @@ def parse_args():
     parser.add_argument("--load_in_4bit", action="store_true", default=True)
     parser.add_argument("--use_text_only", action="store_true", default=False, help="仅使用文本训练")
     
-    # DeepSpeed参数
-    parser.add_argument("--use_deepspeed", action="store_true", default=True)
-    parser.add_argument("--ds_config", default="ds_config.json", type=str)
+
     
     # 模型参数
     parser.add_argument("--model_id", default="showlab/ShowUI-2B")
@@ -175,7 +173,7 @@ def parse_args():
     parser.add_argument("--print_freq", default=10, type=int)
     parser.add_argument("--save_steps", default=500, type=int)
 
-    parser.add_argument("--local_rank", type=int, default=-1, help="DeepSpeed injected argument for local rank.")
+
 
     return parser.parse_args()
 
@@ -295,20 +293,16 @@ def main():
     dataset = ShowUIDataset(train_data_path, processor, args)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
     
-    # 设置优化器
+    # 设置优化器和调度器
     optimizer = AdamW(model.parameters(), lr=args.lr)
-    
-    # DeepSpeed初始化
-    if args.use_deepspeed:
-        model_engine, optimizer, _, _ = deepspeed.initialize(
-            args=args,
-            model=model,
-            optimizer=optimizer,
-            config=args.ds_config
-        )
-        print("✅ DeepSpeed初始化成功")
-    else:
-        model_engine = model
+    total_steps = args.epochs * len(dataloader) // args.grad_accumulation_steps
+    if args.max_steps:
+        total_steps = min(total_steps, args.max_steps)
+
+    scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=args.warmup_steps)
+
+    # 使用标准PyTorch训练
+    model_engine = model
     
     # 训练循环
     print("🏃 开始训练...")
@@ -337,21 +331,21 @@ def main():
                 loss = outputs.loss
                 
                 # 反向传播
-                if args.use_deepspeed:
-                    model_engine.backward(loss)
-                    model_engine.step()
-                else:
-                    loss.backward()
-                    if (step + 1) % args.grad_accumulation_steps == 0:
-                        optimizer.step()
-                        optimizer.zero_grad()
-                        global_step += 1
+                loss = loss / args.grad_accumulation_steps
+                loss.backward()
+
+                if (step + 1) % args.grad_accumulation_steps == 0:
+                    optimizer.step()
+                    scheduler.step()
+                    optimizer.zero_grad()
+                    global_step += 1
                 
-                total_loss += loss.item()
+                total_loss += loss.item() * args.grad_accumulation_steps
                 
                 # 更新进度条
                 progress_bar.set_postfix({
-                    'loss': f'{loss.item():.4f}',
+                    'loss': f'{loss.item() * args.grad_accumulation_steps:.4f}',
+                    'lr': f'{scheduler.get_last_lr()[0]:.2e}',
                     'step': f'{global_step}'
                 })
                 
@@ -373,12 +367,7 @@ def main():
     # 保存模型
     save_path = f"{args.log_base_dir}/{args.exp_id}"
     os.makedirs(save_path, exist_ok=True)
-    
-    if args.use_deepspeed:
-        model_engine.save_pretrained(save_path)
-    else:
-        model.save_pretrained(save_path)
-    
+    model.save_pretrained(save_path)
     print(f"💾 模型权重已保存到 {save_path}")
 
 if __name__ == "__main__":

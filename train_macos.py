@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 macOS兼容的ShowUI微调训练脚本
-移除了deepspeed依赖，使用标准PyTorch训练
+使用标准PyTorch训练，兼容MPS加速
 """
 
 import argparse

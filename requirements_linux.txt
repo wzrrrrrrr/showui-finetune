@@ -12,7 +12,6 @@ datasets>=2.14.0
 
 # 量化和优化
 bitsandbytes>=0.43.0
-deepspeed>=0.14.0
 
 # 数据处理
 pillow>=9.0.0

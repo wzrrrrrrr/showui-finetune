@@ -1,5 +1,32 @@
 # ShowUI Fine-tuning 更新日志
 
+## 2025-06-16 - DeepSpeed移除更新
+
+### 🗑️ 移除的功能
+- **DeepSpeed**: 完全移除了DeepSpeed分布式训练框架
+- **ZeRO优化**: 移除ZeRO内存优化
+- **DeepSpeed配置**: 删除ds_config.json配置文件
+
+### ✅ 保留的功能
+- **QLoRA微调**: 4bit量化微调功能完全保留
+- **混合精度**: BF16/FP16混合精度训练
+- **梯度累积**: 模拟大批次训练
+- **标准优化器**: AdamW + 线性学习率调度
+
+### 🔧 解决的问题
+- **兼容性问题**: 解决了peft与bitsandbytes的通信冲突
+- **依赖简化**: 减少了复杂的分布式训练依赖
+- **稳定性提升**: 使用标准PyTorch训练更稳定
+
+### 📝 修改的文件
+1. **train_linux.py** - 移除DeepSpeed相关代码，使用标准PyTorch训练
+2. **run_linux_training.sh** - 删除DeepSpeed参数和启动方式
+3. **run_training.sh** - 删除ds_zero参数
+4. **requirements_linux.txt** - 删除deepspeed依赖
+5. **setup_env.sh** - 删除DeepSpeed安装
+6. **ds_config.json** - 删除配置文件
+7. **README_LINUX.md** - 更新架构说明
+
 ## 2025-06-16 - WandB移除更新
 
 ### 🗑️ 移除的功能

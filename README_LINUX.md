@@ -9,6 +9,13 @@
 - **CUDA**: 11.8+
 - **Python**: 3.8+
 
+## 🔧 架构说明
+
+本项目使用标准PyTorch训练，兼容peft和bitsandbytes：
+- **移除DeepSpeed**: 避免与peft/bitsandbytes的兼容性问题
+- **QLoRA**: 使用4bit量化进行高效微调
+- **标准优化器**: AdamW + 线性学习率调度
+
 ## 🚀 快速开始
 
 ### 1. 环境准备
@@ -25,8 +32,7 @@ source showui_env/bin/activate
 # 3. 安装依赖
 pip install -r requirements_linux.txt
 
-# 4. 安装DeepSpeed和优化库
-pip install deepspeed
+# 4. 安装优化库
 pip install flash-attn --no-build-isolation  # 可选，编译时间较长
 ```
 
@@ -79,7 +85,6 @@ python test_linux_env.py
 --precision bf16                      # 精度 (bf16/fp16/fp32)
 --use_qlora                          # 使用QLoRA
 --load_in_4bit                       # 4bit量化
---use_deepspeed                      # 使用DeepSpeed
 --lora_r 16                          # LoRA rank
 --lora_alpha 32                      # LoRA alpha
 --batch_size 1                       # 批次大小
@@ -89,14 +94,14 @@ python test_linux_env.py
 --max_steps 1000                    # 最大步数
 ```
 
-### DeepSpeed配置
+### 训练配置
 
-DeepSpeed配置在 `ds_config.json` 中：
+标准PyTorch训练配置：
 
-- **ZeRO Stage 2**: 优化器状态分片
+- **QLoRA**: 4bit量化微调
 - **BF16**: 混合精度训练
-- **梯度裁剪**: 防止梯度爆炸
-- **自动批次大小**: 根据GPU内存自动调整
+- **梯度累积**: 模拟大批次训练
+- **学习率调度**: 线性warmup
 
 ## 📊 监控训练
 
@@ -123,7 +128,7 @@ DeepSpeed配置在 `ds_config.json` 中：
    --grad_accumulation_steps 4
    ```
 
-2. **DeepSpeed初始化失败**
+2. **CUDA环境问题**
    ```bash
    # 检查CUDA环境
    nvidia-smi

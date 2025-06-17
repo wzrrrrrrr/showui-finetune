@@ -62,8 +62,7 @@ TRAIN_ARGS="\
     --precision bf16 \
     --use_qlora \
     --load_in_4bit \
-    --use_deepspeed \
-    --ds_config ds_config.json \
+
     --lora_r 16 \
     --lora_alpha 32 \
     --lora_dropout 0.1 \
@@ -87,8 +86,8 @@ echo "📋 训练参数: $TRAIN_ARGS"
 
 export HF_HUB_OFFLINE=1
 
-# 使用DeepSpeed运行训练
-deepspeed train_linux.py $TRAIN_ARGS
+# 运行训练
+python train_linux.py $TRAIN_ARGS
 
 echo "🎉 训练脚本执行完成！"
 echo "📁 日志保存在: ./logs/${EXP_ID}"

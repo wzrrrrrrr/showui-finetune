@@ -31,8 +31,7 @@ TRAIN_ARGS="
     --local_weight \
     --local_weight_dir /models \
     --precision bf16 \
-    --ds_zero zero2 \
-    --attn_imple flash_attention_2 \
+
     --use_qlora \
     --load_in_4bit \
     --lora_r 16 \
