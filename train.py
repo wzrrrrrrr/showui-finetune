@@ -214,8 +214,7 @@ def setup_model_and_processor(args):
             device_map="auto",
             quantization_config=bnb_config,
             trust_remote_code=True,
-            low_cpu_mem_usage=True,
-            gradient_checkpointing_kwargs={'use_reentrant': False}
+            low_cpu_mem_usage=True
         )
             
         print("✅ 模型加载成功")
