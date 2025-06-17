@@ -85,6 +85,8 @@ TRAIN_ARGS="\
 echo "🏃 开始训练..."
 echo "📋 训练参数: $TRAIN_ARGS"
 
+export HF_HUB_OFFLINE=1
+
 # 使用DeepSpeed运行训练
 deepspeed train_linux.py $TRAIN_ARGS
 
