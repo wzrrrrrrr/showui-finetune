@@ -29,11 +29,11 @@ python -c "import torch; print(f'PyTorch版本: {torch.__version__}'); print(f'C
 
 # 检查模型文件
 echo "📁 检查模型文件..."
-if [ -d "models/ShowUI-2B" ]; then
-    echo "✅ 找到本地模型: models/ShowUI-2B"
-    ls -la models/ShowUI-2B/ | head -5
+if [ -d "showui-finetune/models/ShowUI-2B" ]; then
+    echo "✅ 找到本地模型: showui-finetune/models/ShowUI-2B"
+    ls -la showui-finetune/models/ShowUI-2B/ | head -5
 else
-    echo "❌ 未找到本地模型路径: models/ShowUI-2B"
+    echo "❌ 未找到本地模型路径: showui-finetune/models/ShowUI-2B"
     echo "请确保模型已下载到正确位置"
     exit 1
 fi
@@ -58,7 +58,7 @@ export NCCL_SOCKET_IFNAME=eth0
 TRAIN_ARGS="\
     --model_id showlab/ShowUI-2B \
     --local_weight \
-    --local_weight_dir ./models \
+    --local_weight_dir showui-finetune/models \
     --precision bf16 \
     --use_qlora \
     --load_in_4bit \
