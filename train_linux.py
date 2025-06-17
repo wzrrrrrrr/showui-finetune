@@ -211,8 +211,9 @@ def setup_model_and_processor(args):
     
     # 加载处理器
     try:
+        print(f"🔧 正在从本地路径 '{args.model_id}' 加载处理器...")
         processor = AutoProcessor.from_pretrained(
-            "Qwen/Qwen2-VL-2B-Instruct",
+            args.model_id,  # <--- 关键修改！
             trust_remote_code=True
         )
         print("✅ 处理器加载成功")
