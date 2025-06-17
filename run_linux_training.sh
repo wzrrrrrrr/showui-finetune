@@ -56,7 +56,7 @@ export NCCL_SOCKET_IFNAME=eth0
 
 # 训练参数
 TRAIN_ARGS="\
-    --model_id showlab/ShowUI-2B \
+    --model_id ./models/ShowUI-2B \
     --local_weight \
     --local_weight_dir ./models \
     --precision bf16 \
