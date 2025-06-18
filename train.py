@@ -51,28 +51,30 @@ class ShowUIDataset(Dataset):
         return len(self.data)
 
     # 在你的 ShowUIDataset 类中
+    # 在你的 ShowUIDataset 类中
     def __getitem__(self, idx):
         item = self.data[idx]
         image_path = "未定义"  # 初始化
 
         try:
-            # 1. 提取信息 (这部分不变)
+            # 1. 提取信息
             image_filename = item['img_url']
-            # 我们现在只需要 image_path，不再需要加载 Image 对象了
             image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
             element = item['element'][0]
             instruction = element.get('instruction', '目标区域')
             point = element['point']
 
-            # 2. (全新!) 构建完全符合官方文档的 messages 列表
-            # 将图片路径直接放入 messages 中
+            # 2. 加载图片 (现在我们又需要自己加载了)
+            image = Image.open(image_path).convert('RGB')
+
+            # 3. 构建 messages 列表 (用于生成文本)
             messages = [
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": self.system_prompt},
-                        # 关键修改：将图片路径放在这里
-                        {"type": "image", "image": image_path},
+                        # 注意：这里不再需要图片信息，因为我们手动传递 image 对象
+                        {"type": "image"},
                         {"type": "text", "text": instruction}
                     ]
                 },
@@ -82,18 +84,27 @@ class ShowUIDataset(Dataset):
                 }
             ]
 
-            # 3. (全新!) 调用 processor，只传入 messages
-            # processor 会在内部自己根据 messages 里的路径去加载图片
-            # 注意：这里不再需要 `images=[image]` 参数了！
+            # 4. (关键修改) 严格遵循官方文档的“手动两步法”
+
+            # 第1步：将 messages 列表转换为最终的文本字符串
+            text = self.processor.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False
+            )
+
+            # 第2步：将分离出的 text 和 image 一起传给 processor
+            # processor 现在接收到了它期望的 'text' 和 'images' 参数
             inputs = self.processor(
-                messages=messages,
+                text=[text],  # 必须是 'text' 参数，且是列表形式
+                images=[image],  # 必须是 'images' 参数
                 return_tensors="pt",
                 truncation=True,
                 max_length=self.args.model_max_length
                 # padding 在 collate_fn 中处理
             )
 
-            # 4. 后续处理 (这部分不变)
+            # 5. 后续处理 (这部分不变)
             inputs["labels"] = inputs["input_ids"].clone()
             for key in inputs:
                 if isinstance(inputs[key], torch.Tensor) and inputs[key].dim() > 1:
@@ -102,7 +113,7 @@ class ShowUIDataset(Dataset):
             return inputs
 
         except Exception as e:
-            # 错误处理逻辑保持不变，但现在它捕获到的错误可能更具信息量
+            # 错误处理逻辑保持不变
             print(f"❌ 处理数据时出错! 尝试的图片路径: {image_path}")
             print(f"错误类型: {type(e).__name__}, 错误信息: {e}")
             # 如果需要看完整的错误堆栈，可以取消下面这行的注释
