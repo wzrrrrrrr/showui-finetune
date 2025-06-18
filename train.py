@@ -19,6 +19,7 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import AutoProcessor, BitsAndBytesConfig
 from tqdm import tqdm
 from PIL import Image
+from functools import partial  # <--- 在这里加上这行
 
 
 class ShowUIDataset(Dataset):
