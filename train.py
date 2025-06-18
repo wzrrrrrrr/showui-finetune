@@ -58,6 +58,8 @@ class ShowUIDataset(Dataset):
             # 1. 提取信息
             image_filename = item['img_url']
             image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
+            print(f"DEBUG: 正在尝试加载图片，绝对路径是: {os.path.abspath(image_path)}")
+
             element = item['element'][0]
             instruction = element.get('instruction', '目标区域')
             point = element['point']
