@@ -83,14 +83,25 @@ class ShowUIDataset(Dataset):
             }
         ]
 
-        # 5. 调用 processor
+        # 4. (关键修改) 采用两步法来调用 processor
         try:
+            # 第1步：将 messages 列表转换为最终的文本字符串
+            # 我们在这里不进行分词 (tokenize=False)，因为下一步 processor 会一起处理
+            text = self.processor.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False  # 训练时我们有完整的回答，不需要生成提示
+            )
+
+            # 第2步：将格式化好的 text 和 image 一起传给 processor
+            # processor 现在接收到了它期望的 'text' 和 'images' 参数
             inputs = self.processor(
-                images=[image],
-                messages=messages,
+                text=[text],  # 以列表形式传入
+                images=[image],  # 以列表形式传入
                 return_tensors="pt",
                 truncation=True,
                 max_length=self.args.model_max_length
+                # padding 在 collate_fn 中处理，所以这里不需要
             )
 
             # ... 后续设置 labels 和 squeeze 的代码保持不变 ...
