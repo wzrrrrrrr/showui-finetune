@@ -50,57 +50,29 @@ class ShowUIDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
+    # 在你的 ShowUIDataset 类中
     def __getitem__(self, idx):
         item = self.data[idx]
-        image_path = "无"  # 初始化一个默认值，用于错误日志
-
-        # ================== [ 调试代码块 开始 ] ==================
-        print("\n" + "=" * 20 + f" 正在处理索引 {idx} " + "=" * 20)
-        try:
-            # 1. 打印传入的 self.data_path
-            print(f"[DEBUG] self.data_path = {self.data_path}")
-
-            # 2. 打印解析出的目录
-            metadata_dir = os.path.dirname(self.data_path)
-            print(f"[DEBUG] os.path.dirname(self.data_path) = {metadata_dir}")
-
-            # 3. 打印从JSON中读取的文件名
-            image_filename = item['img_url']
-            print(f"[DEBUG] item['img_url'] = {image_filename}")
-
-            # 4. 打印最终拼接的相对路径
-            image_path = os.path.join(metadata_dir, 'images', image_filename)
-            print(f"[DEBUG] 最终拼接的相对路径 image_path = {image_path}")
-
-            # 5. 打印最终的绝对路径，并检查文件是否存在
-            absolute_image_path = os.path.abspath(image_path)
-            print(f"[DEBUG] 最终拼接的绝对路径 = {absolute_image_path}")
-            print(f"[DEBUG] os.path.exists() 检查文件是否存在? -> {os.path.exists(absolute_image_path)}")
-        except Exception as e:
-            print(f"[DEBUG] 在打印调试信息时就出错了: {e}")
-        print("=" * 55)
-        # ================== [ 调试代码块 结束 ] ==================
+        image_path = "未定义"  # 初始化
 
         try:
-            # 1. 提取信息
+            # 1. 提取信息 (这部分不变)
             image_filename = item['img_url']
+            # 我们现在只需要 image_path，不再需要加载 Image 对象了
             image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
-            print(f"DEBUG: 正在尝试加载图片，绝对路径是: {os.path.abspath(image_path)}")
-
             element = item['element'][0]
             instruction = element.get('instruction', '目标区域')
             point = element['point']
 
-            # 2. 加载图片
-            image = Image.open(image_path).convert('RGB')
-
-            # 3. 构建 messages 列表
+            # 2. (全新!) 构建完全符合官方文档的 messages 列表
+            # 将图片路径直接放入 messages 中
             messages = [
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": self.system_prompt},
-                        {"type": "image"},
+                        # 关键修改：将图片路径放在这里
+                        {"type": "image", "image": image_path},
                         {"type": "text", "text": instruction}
                     ]
                 },
@@ -110,22 +82,18 @@ class ShowUIDataset(Dataset):
                 }
             ]
 
-            # 4. 调用 processor
-            text = self.processor.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=False
-            )
-
+            # 3. (全新!) 调用 processor，只传入 messages
+            # processor 会在内部自己根据 messages 里的路径去加载图片
+            # 注意：这里不再需要 `images=[image]` 参数了！
             inputs = self.processor(
-                text=[text],
-                images=[image],
+                messages=messages,
                 return_tensors="pt",
                 truncation=True,
                 max_length=self.args.model_max_length
+                # padding 在 collate_fn 中处理
             )
 
-            # 5. 后续处理
+            # 4. 后续处理 (这部分不变)
             inputs["labels"] = inputs["input_ids"].clone()
             for key in inputs:
                 if isinstance(inputs[key], torch.Tensor) and inputs[key].dim() > 1:
@@ -134,9 +102,8 @@ class ShowUIDataset(Dataset):
             return inputs
 
         except Exception as e:
-            # ================ [ 关键修改在这里 ] ================
-            # 1. 打印更详细的错误信息，帮助你定位坏数据
-            print(f"❌ 处理数据时出错! 图片路径: {image_path}")
+            # 错误处理逻辑保持不变，但现在它捕获到的错误可能更具信息量
+            print(f"❌ 处理数据时出错! 尝试的图片路径: {image_path}")
             print(f"错误类型: {type(e).__name__}, 错误信息: {e}")
             # 如果需要看完整的错误堆栈，可以取消下面这行的注释
             # traceback.print_exc()
