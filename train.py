@@ -52,9 +52,6 @@ class ShowUIDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
 
-        # 1. 定义系统提示 (可以放在类初始化里，这里为方便展示)
-        _SYSTEM = "Based on the screenshot of the page, I give a text description and you give its corresponding location. The coordinate represents a clickable location [x, y] for an element, which is a relative coordinate on the screenshot, scaled from 0 to 1."
-
         # 2. 提取信息
         image_filename = item['img_url']
         image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
