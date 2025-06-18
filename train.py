@@ -219,7 +219,8 @@ def setup_model_and_processor(args):
         # 这样可以避免任何 from_pretrained 时的参数冲突
         processor = AutoProcessor.from_pretrained(
             args.model_id,
-            trust_remote_code=True
+            trust_remote_code=True,
+            size = {'shortest_edge' : 448,'longest_edge' :  448}
         )
         print("✅ 处理器默认加载成功。")
 
