@@ -210,27 +210,35 @@ def setup_model_and_processor(args):
             bnb_4bit_quant_type="nf4",
         )
 
-    # 加载处理器
+    # ==================== [ 全新、最关键的修改 ] ====================
+    # 加载处理器，采用“先加载，后修改”的稳妥策略
     try:
         print(f"🔧 正在从 '{args.model_id}' 加载处理器...")
 
-        # 定义 Qwen2-VL 专用的尺寸参数
-        min_pixels = 256 * 28 * 28
-        max_pixels = 1344 * 28 * 28
-
+        # 步骤1: 先用最基础的方式加载 processor，不提供任何尺寸参数
+        # 这样可以避免任何 from_pretrained 时的参数冲突
         processor = AutoProcessor.from_pretrained(
             args.model_id,
-            min_pixels=min_pixels,
-            max_pixels=max_pixels,
             trust_remote_code=True
         )
-        print("✅ 处理器加载成功，并已使用正确的 min/max_pixels 配置！")
-        # size = {"shortest_edge": 448, "longest_edge": 448},
+        print("✅ 处理器默认加载成功。")
 
+        # 步骤2: 精确地、手动地修改其内部 image_processor 的属性
+        # 这是最可靠的方式，直接作用于最终对象
+        processor.image_processor.min_pixels = 256 * 28 * 28
+        processor.image_processor.max_pixels = 1344 * 28 * 28
+        print("👍 已手动设置 image_processor 的 min/max_pixels！")
+
+        # 设置聊天模板 (这部分保持不变)
         CHAT_TEMPLATE = "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}<|im_start|>{{ message['role'] }}\n{% if message['content'] is string %}{{ message['content'] }}<|im_end|>\n{% else %}{% for content in message['content'] %}{% if content['type'] == 'image' or 'image' in content or 'image_url' in content %}{% set image_count.value = image_count.value + 1 %}{% if add_vision_id %}Picture {{ image_count.value }}: {% endif %}<|vision_start|><|image_pad|><|vision_end|>{% elif content['type'] == 'video' or 'video' in content %}{% set video_count.value = video_count.value + 1 %}{% if add_vision_id %}Video {{ video_count.value }}: {% endif %}<|vision_start|><|video_pad|><|vision_end|>{% elif 'text' in content %}{{ content['text'] }}{% endif %}{% endfor %}<|im_end|>\n{% endif %}{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
         processor.chat_template = CHAT_TEMPLATE
         processor.tokenizer.chat_template = CHAT_TEMPLATE
         print("👍 已成功设置官方 ShowUI 聊天模板")
+
+    except Exception as e:
+        print(f"❌ 处理器加载失败: {e}")
+        return None, None, None
+    # ==================== [ 修改结束 ] ====================
 
     except Exception as e:
         print(f"❌ 处理器加载失败: {e}")
