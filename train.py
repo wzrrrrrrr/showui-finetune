@@ -54,6 +54,33 @@ class ShowUIDataset(Dataset):
         item = self.data[idx]
         image_path = "无"  # 初始化一个默认值，用于错误日志
 
+        # ================== [ 调试代码块 开始 ] ==================
+        print("\n" + "=" * 20 + f" 正在处理索引 {idx} " + "=" * 20)
+        try:
+            # 1. 打印传入的 self.data_path
+            print(f"[DEBUG] self.data_path = {self.data_path}")
+
+            # 2. 打印解析出的目录
+            metadata_dir = os.path.dirname(self.data_path)
+            print(f"[DEBUG] os.path.dirname(self.data_path) = {metadata_dir}")
+
+            # 3. 打印从JSON中读取的文件名
+            image_filename = item['img_url']
+            print(f"[DEBUG] item['img_url'] = {image_filename}")
+
+            # 4. 打印最终拼接的相对路径
+            image_path = os.path.join(metadata_dir, 'images', image_filename)
+            print(f"[DEBUG] 最终拼接的相对路径 image_path = {image_path}")
+
+            # 5. 打印最终的绝对路径，并检查文件是否存在
+            absolute_image_path = os.path.abspath(image_path)
+            print(f"[DEBUG] 最终拼接的绝对路径 = {absolute_image_path}")
+            print(f"[DEBUG] os.path.exists() 检查文件是否存在? -> {os.path.exists(absolute_image_path)}")
+        except Exception as e:
+            print(f"[DEBUG] 在打印调试信息时就出错了: {e}")
+        print("=" * 55)
+        # ================== [ 调试代码块 结束 ] ==================
+
         try:
             # 1. 提取信息
             image_filename = item['img_url']
