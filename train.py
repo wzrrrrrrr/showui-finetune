@@ -52,59 +52,51 @@ class ShowUIDataset(Dataset):
 
     def __getitem__(self, idx):
         item = self.data[idx]
+        image_path = "无"  # 初始化一个默认值，用于错误日志
 
-        # 2. 提取信息
-        image_filename = item['img_url']
-        image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
-        element = item['element'][0]
-        instruction = element.get('instruction', '目标区域')
-        point = element['point']  # point 应该是 [0.xx, 0.yy] 格式
-
-        # 3. 加载图片
         try:
+            # 1. 提取信息
+            image_filename = item['img_url']
+            image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
+            element = item['element'][0]
+            instruction = element.get('instruction', '目标区域')
+            point = element['point']
+
+            # 2. 加载图片
             image = Image.open(image_path).convert('RGB')
-        except Exception as e:
-            image = Image.new('RGB', (448, 448), color='white')
 
-        # 4. (全新!) 构建符合官方文档的 messages 列表
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": self.system_prompt},  # <--- 使用 self.system_prompt
-                    {"type": "image"},
-                    {"type": "text", "text": instruction}
-                ]
-            },
-            {
-                "role": "assistant",
-                # 目标输出直接是 point 列表的字符串形式！
-                "content": str(point)
-            }
-        ]
+            # 3. 构建 messages 列表
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self.system_prompt},
+                        {"type": "image"},
+                        {"type": "text", "text": instruction}
+                    ]
+                },
+                {
+                    "role": "assistant",
+                    "content": str(point)
+                }
+            ]
 
-        # 4. (关键修改) 采用两步法来调用 processor
-        try:
-            # 第1步：将 messages 列表转换为最终的文本字符串
-            # 我们在这里不进行分词 (tokenize=False)，因为下一步 processor 会一起处理
+            # 4. 调用 processor
             text = self.processor.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
-                add_generation_prompt=False  # 训练时我们有完整的回答，不需要生成提示
+                add_generation_prompt=False
             )
 
-            # 第2步：将格式化好的 text 和 image 一起传给 processor
-            # processor 现在接收到了它期望的 'text' 和 'images' 参数
             inputs = self.processor(
-                text=[text],  # 以列表形式传入
-                images=[image],  # 以列表形式传入
+                text=[text],
+                images=[image],
                 return_tensors="pt",
                 truncation=True,
                 max_length=self.args.model_max_length
-                # padding 在 collate_fn 中处理，所以这里不需要
             )
 
-            # ... 后续设置 labels 和 squeeze 的代码保持不变 ...
+            # 5. 后续处理
             inputs["labels"] = inputs["input_ids"].clone()
             for key in inputs:
                 if isinstance(inputs[key], torch.Tensor) and inputs[key].dim() > 1:
@@ -113,14 +105,25 @@ class ShowUIDataset(Dataset):
             return inputs
 
         except Exception as e:
-            print(f"⚠️ 处理数据时出错: {e}")
-            # fallback逻辑保持不变
-            return {
-                "input_ids": torch.zeros(100, dtype=torch.long),
-                "attention_mask": torch.ones(100, dtype=torch.long),
-                "labels": torch.zeros(100, dtype=torch.long)
-            }
+            # ================ [ 关键修改在这里 ] ================
+            # 1. 打印更详细的错误信息，帮助你定位坏数据
+            print(f"❌ 处理数据时出错! 图片路径: {image_path}")
+            print(f"错误类型: {type(e).__name__}, 错误信息: {e}")
+            # 如果需要看完整的错误堆栈，可以取消下面这行的注释
+            # traceback.print_exc()
 
+            # 2. 返回一个包含所有必要键的、完整的 fallback 字典
+            # 创建一个虚拟的 pixel_values 张量
+            dummy_pixel_values = torch.zeros((3, 448, 448), dtype=torch.float)
+            dummy_input_ids = torch.zeros(100, dtype=torch.long)
+
+            return {
+                "pixel_values": dummy_pixel_values,
+                "input_ids": dummy_input_ids,
+                "attention_mask": torch.ones_like(dummy_input_ids),
+                "labels": torch.full_like(dummy_input_ids, -100)  # 标签用-100填充
+            }
+        # ================ [ 修改结束 ] ================
 
 def parse_args():
     parser = argparse.ArgumentParser(description="ShowUI-2B微调训练")
