@@ -252,16 +252,35 @@ def setup_lora(model, args):
 
 
 def find_all_linear_names(model):
-    """自动查找所有可应用LoRA的线性层名称"""
+    """
+    自动查找所有可应用LoRA的线性层名称。
+    这次的实现更安全，只考虑了常见的Attention和MLP层名。
+    """
+    # 目标模块的常见名称
+    # 对于Qwen2系列，常见的线性层在qkv_proj, o_proj, up_proj, gate_proj, down_proj
+    # 我们这里列一个更通用的列表
+    supported_lora_modules = [
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
+        "qkv_proj", "out_proj", "in_proj",  # 适用于其他模型的名字
+        "fc1", "fc2"  # Vision Transformer 中的名字
+    ]
+
     lora_module_names = set()
     for name, module in model.named_modules():
         if isinstance(module, (bnb.nn.Linear4bit, bnb.nn.Linear8bitLt, torch.nn.Linear)):
-            names = name.split('.')
-            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+            # 获取模块名的最后一部分
+            module_name = name.split('.')[-1]
+            # 只有当这个名字在我们支持的列表中时，才添加它
+            if module_name in supported_lora_modules:
+                lora_module_names.add(module_name)
 
-    # 根据经验，通常不希望对 lm_head 和 embed_tokens 进行 LoRA
+    # 不对视觉编码器的投影层和语言模型的输出层应用LoRA
+    # 这是一种常见的、能提高稳定性的做法
     if 'lm_head' in lora_module_names:
         lora_module_names.remove('lm_head')
+    if 'proj' in lora_module_names:
+        lora_module_names.remove('proj')  # 通常是ViT的输出投影，不建议LoRA
 
     return list(lora_module_names)
 
