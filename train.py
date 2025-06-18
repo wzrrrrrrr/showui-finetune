@@ -20,13 +20,18 @@ from transformers import AutoProcessor, BitsAndBytesConfig
 from tqdm import tqdm
 from PIL import Image
 
+
 class ShowUIDataset(Dataset):
     """ShowUI数据集类"""
+
     def __init__(self, data_path, processor, args):
         self.data_path = data_path
         self.processor = processor
         self.args = args
-        
+
+        # 将系统提示定义为类的属性
+        self.system_prompt = "Based on the screenshot of the page, I give a text description and you give its corresponding location. The coordinate represents a clickable location [x, y] for an element, which is a relative coordinate on the screenshot, scaled from 0 to 1."
+
         # 读取数据
         with open(data_path, 'r', encoding='utf-8') as f:
             if data_path.endswith('.json'):
@@ -38,113 +43,100 @@ class ShowUIDataset(Dataset):
                 for line in f:
                     if line.strip():
                         self.data.append(json.loads(line))
-        
+
         print(f"📊 加载了 {len(self.data)} 条训练数据")
-    
+
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, idx):
         item = self.data[idx]
-        
-        # 根据数据格式处理
-        if 'img_url' in item:
-            # 新格式：my_dataset/metadata.json
-            image_filename = item['img_url']
-            image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
-            
-            # 构建训练文本
-            elements = item.get('element', [])
-            if elements:
-                element = elements[0]  # 取第一个元素
-                instruction = element.get('instruction', '点击')
-                point = element.get('point', [0.5, 0.5])
-                
-                # 转换相对坐标到绝对坐标
-                img_size = item.get('img_size', [1282, 846])
-                abs_x = int(point[0] * img_size[0])
-                abs_y = int(point[1] * img_size[1])
-                
-                text = f"用户: 请点击{instruction}\n助手: 我会帮您点击{instruction}。<click>{abs_x}, {abs_y}</click>"
-            else:
-                text = "用户: 描述这个图片\n助手: 这是一个界面截图。"
-                
-        else:
-            # 旧格式：conversations
-            image_path = os.path.join(os.path.dirname(self.data_path), item['image'])
-            conversations = item['conversations']
-            
-            # 构建简单的对话文本
-            text = ""
-            for conv in conversations:
-                if conv['from'] == 'human':
-                    user_text = conv['value'].replace('<image>\n', '').replace('<image>', '').strip()
-                    text += f"用户: {user_text}\n"
-                elif conv['from'] == 'gpt' or conv['from'] == 'assistant':
-                    assistant_text = conv['value'].strip()
-                    text += f"助手: {assistant_text}\n"
-        
-        # 加载图片
+
+        # 1. 定义系统提示 (可以放在类初始化里，这里为方便展示)
+        _SYSTEM = "Based on the screenshot of the page, I give a text description and you give its corresponding location. The coordinate represents a clickable location [x, y] for an element, which is a relative coordinate on the screenshot, scaled from 0 to 1."
+
+        # 2. 提取信息
+        image_filename = item['img_url']
+        image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
+        element = item['element'][0]
+        instruction = element.get('instruction', '目标区域')
+        point = element['point']  # point 应该是 [0.xx, 0.yy] 格式
+
+        # 3. 加载图片
         try:
             image = Image.open(image_path).convert('RGB')
         except Exception as e:
-            print(f"⚠️ 无法加载图片 {image_path}: {e}")
-            # 创建一个空白图片作为fallback
-            image = Image.new('RGB', (224, 224), color='white')
-        
-        # 使用processor处理（暂时只用文本，避免图像token问题）
+            image = Image.new('RGB', (448, 448), color='white')
+
+        # 4. (全新!) 构建符合官方文档的 messages 列表
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": self.system_prompt},  # <--- 使用 self.system_prompt
+                    {"type": "image"},
+                    {"type": "text", "text": instruction}
+                ]
+            },
+            {
+                "role": "assistant",
+                # 目标输出直接是 point 列表的字符串形式！
+                "content": str(point)
+            }
+        ]
+
+        # 5. 调用 processor
         try:
-            inputs = self.processor.tokenizer(
-                text,
+            inputs = self.processor(
+                images=[image],
+                messages=messages,
                 return_tensors="pt",
-                padding=True,
                 truncation=True,
                 max_length=self.args.model_max_length
             )
-            
-            # 设置labels
+
+            # ... 后续设置 labels 和 squeeze 的代码保持不变 ...
             inputs["labels"] = inputs["input_ids"].clone()
-            
-            # 将tensor从batch维度中取出
             for key in inputs:
                 if isinstance(inputs[key], torch.Tensor) and inputs[key].dim() > 1:
                     inputs[key] = inputs[key].squeeze(0)
-            
+
             return inputs
-            
+
         except Exception as e:
             print(f"⚠️ 处理数据时出错: {e}")
-            # 返回一个简单的fallback
+            # fallback逻辑保持不变
             return {
                 "input_ids": torch.zeros(100, dtype=torch.long),
                 "attention_mask": torch.ones(100, dtype=torch.long),
                 "labels": torch.zeros(100, dtype=torch.long)
             }
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="ShowUI-2B微调训练")
-    
+
     # 基础参数
     parser.add_argument("--precision", default="bf16", type=str, choices=["fp32", "bf16", "fp16"])
     parser.add_argument("--use_qlora", action="store_true", default=True)
     parser.add_argument("--load_in_4bit", action="store_true", default=True)
     parser.add_argument("--use_text_only", action="store_true", default=False, help="仅使用文本训练")
-    
+
     # 模型参数
     parser.add_argument("--model_id", default="showlab/ShowUI-2B")
     parser.add_argument("--local_weight", action="store_true", default=True)
     parser.add_argument("--local_weight_dir", default="./models", help="本地模型路径")
-    
+
     # 数据参数
     parser.add_argument("--dataset_dir", default="./data", type=str)
     parser.add_argument("--train_json", default="my_dataset/metadata.json", type=str)
     parser.add_argument("--model_max_length", default=2048, type=int)
-    
+
     # LoRA参数
     parser.add_argument("--lora_r", default=16, type=int)
     parser.add_argument("--lora_alpha", default=32, type=int)
     parser.add_argument("--lora_dropout", default=0.1, type=float)
-    
+
     # 训练参数
     parser.add_argument("--log_base_dir", default="./logs", type=str)
     parser.add_argument("--exp_id", default="showui", type=str)
@@ -156,13 +148,14 @@ def parse_args():
     parser.add_argument("--warmup_steps", default=100, type=int)
     parser.add_argument("--print_freq", default=10, type=int)
     parser.add_argument("--save_steps", default=500, type=int)
-    
+
     return parser.parse_args()
+
 
 def setup_model_and_processor(args):
     """设置模型和处理器"""
     print("🔧 正在设置模型和处理器...")
-    
+
     # 确定设备
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -171,14 +164,14 @@ def setup_model_and_processor(args):
     else:
         device = torch.device("cpu")
         print("💻 使用CPU")
-    
+
     # 设置数据类型
     torch_dtype = torch.float32
     if args.precision == "bf16":
         torch_dtype = torch.bfloat16
     elif args.precision == "fp16":
         torch_dtype = torch.half
-    
+
     # 量化配置
     bnb_config = None
     if args.use_qlora and args.load_in_4bit:
@@ -188,7 +181,7 @@ def setup_model_and_processor(args):
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
-    
+
     # 加载处理器
     try:
         print(f"🔧 正在从本地路径 '{args.model_id}' 加载处理器...")
@@ -198,16 +191,22 @@ def setup_model_and_processor(args):
             trust_remote_code=True
         )
         print("✅ 处理器加载成功")
+
+        CHAT_TEMPLATE = "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}<|im_start|>{{ message['role'] }}\n{% if message['content'] is string %}{{ message['content'] }}<|im_end|>\n{% else %}{% for content in message['content'] %}{% if content['type'] == 'image' or 'image' in content or 'image_url' in content %}{% set image_count.value = image_count.value + 1 %}{% if add_vision_id %}Picture {{ image_count.value }}: {% endif %}<|vision_start|><|image_pad|><|vision_end|>{% elif content['type'] == 'video' or 'video' in content %}{% set video_count.value = video_count.value + 1 %}{% if add_vision_id %}Video {{ video_count.value }}: {% endif %}<|vision_start|><|video_pad|><|vision_end|>{% elif 'text' in content %}{{ content['text'] }}{% endif %}{% endfor %}<|im_end|>\n{% endif %}{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
+        processor.chat_template = CHAT_TEMPLATE
+        processor.tokenizer.chat_template = CHAT_TEMPLATE
+        print("👍 已成功设置官方 ShowUI 聊天模板")
+
     except Exception as e:
         print(f"❌ 处理器加载失败: {e}")
         return None, None, None
-    
+
     # 加载模型
     try:
         from transformers import Qwen2VLForConditionalGeneration
-        
+
         model_path = f"{args.local_weight_dir}/ShowUI-2B"
-        
+
         model = Qwen2VLForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=torch_dtype,
@@ -216,44 +215,89 @@ def setup_model_and_processor(args):
             trust_remote_code=True,
             low_cpu_mem_usage=True
         )
-            
+
         print("✅ 模型加载成功")
-        
+
     except Exception as e:
         print(f"❌ 模型加载失败: {e}")
         print("💡 请确保ShowUI-2B模型文件在 ./models/ShowUI-2B 目录下")
         return None, None, None
-    
+
     return model, processor, device
+
 
 def setup_lora(model, args):
     """设置LoRA微调"""
     if args.lora_r <= 0:
         return model
-        
+
     print("🔧 正在设置LoRA...")
-    
+
     if args.use_qlora:
         model = prepare_model_for_kbit_training(model)
-    
-    # 目标模块
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
-    
+
+    target_modules = find_all_linear_names(model)
+    print(f"🎯 自动查找到的LoRA目标模块: {target_modules}")
+
     lora_config = LoraConfig(
         r=args.lora_r,
         lora_alpha=args.lora_alpha,
-        target_modules=target_modules,
+        target_modules=target_modules,  # <--- 使用自动查找到的列表
         lora_dropout=args.lora_dropout,
         bias="none",
         task_type="CAUSAL_LM",
     )
-    
+
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
-    
+
     return model
 
+
+def find_all_linear_names(model):
+    """自动查找所有可应用LoRA的线性层名称"""
+    lora_module_names = set()
+    for name, module in model.named_modules():
+        if isinstance(module, (bnb.nn.Linear4bit, bnb.nn.Linear8bitLt, torch.nn.Linear)):
+            names = name.split('.')
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+
+    # 根据经验，通常不希望对 lm_head 和 embed_tokens 进行 LoRA
+    if 'lm_head' in lora_module_names:
+        lora_module_names.remove('lm_head')
+
+    return list(lora_module_names)
+
+
 def main():
+    # 问题: 当前的 padding 是在 __getitem__ 中通过 padding="max_length" 实现的。这意味着每个样本都会被填充到 model_max_length，可能会浪费大量显存和计算。
+    # 建议: 使用动态批处理填充（Dynamic Padding）。这需要自定义一个 collate_fn。
+    def collate_fn(batch, processor):
+        # 将批次中的样本解构
+        pixel_values = torch.cat([item['pixel_values'] for item in batch], dim=0)
+
+        # 对文本部分进行动态填充
+        text_inputs = processor.tokenizer.pad(
+            [{"input_ids": item["input_ids"], "attention_mask": item["attention_mask"]} for item in batch],
+            return_tensors="pt",
+            padding=True
+        )
+
+        # 对标签也进行填充，使用 -100 忽略 padding 部分的损失
+        labels = processor.tokenizer.pad(
+            [{"input_ids": item["labels"]} for item in batch],
+            return_tensors="pt",
+            padding=True
+        )["input_ids"]
+        labels[labels == processor.tokenizer.pad_token_id] = -100
+
+        return {
+            'pixel_values': pixel_values,
+            'input_ids': text_inputs['input_ids'],
+            'attention_mask': text_inputs['attention_mask'],
+            'labels': labels
+        }
+
     args = parse_args()
 
     print("🚀 开始ShowUI-2B微调训练")
@@ -272,7 +316,8 @@ def main():
     # 创建数据集
     train_data_path = os.path.join(args.dataset_dir, args.train_json)
     dataset = ShowUIDataset(train_data_path, processor, args)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4,
+                            collate_fn=partial(collate_fn, processor=processor))
 
     # 设置优化器和调度器
     optimizer = AdamW(model.parameters(), lr=args.lr)
@@ -290,7 +335,7 @@ def main():
         model.train()
         total_loss = 0
 
-        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{args.epochs}")
+        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{args.epochs}")
 
         for step, batch in enumerate(progress_bar):
             # 检查是否达到最大步数
@@ -302,7 +347,7 @@ def main():
                 # 移动数据到设备
                 if device.type != "cpu":
                     batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v
-                            for k, v in batch.items()}
+                             for k, v in batch.items()}
 
                 # 前向传播
                 outputs = model(**batch)
@@ -331,7 +376,7 @@ def main():
                 continue
 
         avg_loss = total_loss / max(len(dataloader), 1)
-        print(f"Epoch {epoch+1}/{args.epochs} - 平均损失: {avg_loss:.4f} - 总步数: {global_step}")
+        print(f"Epoch {epoch + 1}/{args.epochs} - 平均损失: {avg_loss:.4f} - 总步数: {global_step}")
 
         # 如果达到最大步数，提前结束
         if args.max_steps and global_step >= args.max_steps:
@@ -344,6 +389,7 @@ def main():
     os.makedirs(save_path, exist_ok=True)
     model.save_pretrained(save_path)
     print(f"💾 模型权重已保存到 {save_path}")
+
 
 if __name__ == "__main__":
     main()
