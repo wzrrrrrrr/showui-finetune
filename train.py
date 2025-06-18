@@ -3,7 +3,7 @@
 ShowUI-2B微调训练脚本
 支持NVIDIA GPU + CUDA，兼容peft和bitsandbytes
 """
-
+import bitsandbytes as bnb
 import argparse
 import os
 import sys
