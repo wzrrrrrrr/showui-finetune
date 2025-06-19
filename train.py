@@ -218,15 +218,11 @@ def setup_model_and_processor(args):
         processor = AutoProcessor.from_pretrained(
             args.model_id,
             trust_remote_code=True,
+            min_pixels = min_pixels,
+            max_pixels = max_pixels,
             size = {'shortest_edge' : min_pixels,'longest_edge' :  max_pixels}
         )
         print("✅ 处理器默认加载成功。")
-
-        # 步骤2: 精确地、手动地修改其内部 image_processor 的属性
-        # 这是最可靠的方式，直接作用于最终对象
-        processor.image_processor.min_pixels = 256 * 28 * 28
-        processor.image_processor.max_pixels = 1344 * 28 * 28
-        print("👍 已手动设置 image_processor 的 min/max_pixels！")
 
         # 设置聊天模板 (这部分保持不变)
         CHAT_TEMPLATE = "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}<|im_start|>{{ message['role'] }}\n{% if message['content'] is string %}{{ message['content'] }}<|im_end|>\n{% else %}{% for content in message['content'] %}{% if content['type'] == 'image' or 'image' in content or 'image_url' in content %}{% set image_count.value = image_count.value + 1 %}{% if add_vision_id %}Picture {{ image_count.value }}: {% endif %}<|vision_start|><|image_pad|><|vision_end|>{% elif content['type'] == 'video' or 'video' in content %}{% set video_count.value = video_count.value + 1 %}{% if add_vision_id %}Video {{ video_count.value }}: {% endif %}<|vision_start|><|video_pad|><|vision_end|>{% elif 'text' in content %}{{ content['text'] }}{% endif %}{% endfor %}<|im_end|>\n{% endif %}{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
