@@ -315,13 +315,12 @@ def find_all_linear_names(model):
 
 
 def main():
+    # 在你的 main 函数里
     def collate_fn(batch, processor):
-        # 过滤掉因为读取错误等原因返回的 None 样本
         batch = [item for item in batch if item is not None]
         if not batch:
             return None
 
-        # 您的collate_fn实现得很好，可以保持原样
         try:
             keys = batch[0].keys()
             padded_batch = {}
@@ -329,14 +328,13 @@ def main():
             for key in keys:
                 values = [item[key] for item in batch]
 
-                if key == 'pixel_values':
-                    # pixel_values 都是相同尺寸的，直接用 stack 合并
+                # ==================== [ 关键修改 ] ====================
+                # pixel_values 和 image_grid_thw 都是关于图像的，通常可以直接堆叠
+                if key in ['pixel_values', 'image_grid_thw']:
                     padded_batch[key] = torch.stack(values, dim=0)
+                # ==================== [ 修改结束 ] ====================
                 elif key in ['input_ids', 'attention_mask', 'labels']:
-                    # 文本相关张量需要填充到批内最大长度
                     padding_value = -100 if key == 'labels' else processor.tokenizer.pad_token_id
-
-                    # 使用 PyTorch 自带的 pad_sequence 进行填充，非常高效
                     padded_batch[key] = torch.nn.utils.rnn.pad_sequence(
                         values, batch_first=True, padding_value=padding_value
                     )
@@ -350,7 +348,6 @@ def main():
             print(f"❌ collate_fn 中出错!")
             traceback.print_exc()
             return None
-
     args = parse_args()
 
     print("🚀 开始ShowUI-2B微调训练")
