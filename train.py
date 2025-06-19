@@ -94,7 +94,7 @@ class ShowUIDataset(Dataset):
             image = Image.open(image_path).convert('RGB')
             #   B.2 使用 processor 内部的 image_processor 对图片进行预处理，得到图片张量
             #       这是我们之前所有方案都缺失的最关键一步！
-            image_inputs = self.processor.image_processor(images=image, return_tensors="pt")['pixel_values']
+            image_inputs_dict = self.processor.image_processor(images=image, return_tensors="pt")
 
             # 步骤 C: 将最终的文本和图片占位符合并，进行最后处理
             #       这里我们只用 tokenizer，因为它负责将文本和视觉占位符合并
@@ -109,6 +109,7 @@ class ShowUIDataset(Dataset):
             # 步骤 D: 将预处理好的图片张量添加到 inputs 字典中
             # Qwen-VL模型期望这个键名为 'pixel_values'
             inputs['pixel_values'] = image_inputs
+            inputs['image_grid_thw'] = image_inputs_dict['image_grid_thw']
             # ================== [ 修改结束 ] ==================
 
             # 5. 后续处理 (这部分不变)
