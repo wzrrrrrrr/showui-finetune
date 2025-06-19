@@ -335,31 +335,57 @@ def main():
     # 问题: 当前的 padding 是在 __getitem__ 中通过 padding="max_length" 实现的。这意味着每个样本都会被填充到 model_max_length，可能会浪费大量显存和计算。
     # 建议: 使用动态批处理填充（Dynamic Padding）。这需要自定义一个 collate_fn。
     def collate_fn(batch, processor):
-        # 将批次中的样本解构
-        pixel_values = torch.cat([item['pixel_values'] for item in batch], dim=0)
+        # 过滤掉 None 样本
+        batch = [item for item in batch if item is not None]
+        if not batch:
+            return None
 
-        # 对文本部分进行动态填充
-        text_inputs = processor.tokenizer.pad(
-            [{"input_ids": item["input_ids"], "attention_mask": item["attention_mask"]} for item in batch],
-            return_tensors="pt",
-            padding=True
-        )
+        # ================ [ 全新的、更简单的实现 ] ================
+        try:
+            # 1. 将所有字典的键分离出来
+            keys = batch[0].keys()
+            padded_batch = {}
 
-        # 对标签也进行填充，使用 -100 忽略 padding 部分的损失
-        labels = processor.tokenizer.pad(
-            [{"input_ids": item["labels"]} for item in batch],
-            return_tensors="pt",
-            padding=True
-        )["input_ids"]
-        labels[labels == processor.tokenizer.pad_token_id] = -100
+            # 2. 遍历每一个键 (pixel_values, input_ids, attention_mask, labels)
+            for key in keys:
+                # 提取这个键在整个批次中的所有值
+                values = [item[key] for item in batch]
 
-        return {
-            'pixel_values': pixel_values,
-            'input_ids': text_inputs['input_ids'],
-            'attention_mask': text_inputs['attention_mask'],
-            'labels': labels
-        }
+                # 3. 根据键的类型进行不同的处理
+                if key == 'pixel_values':
+                    # 对于 pixel_values，直接用 stack 合并
+                    padded_batch[key] = torch.stack(values, dim=0)
+                elif key in ['input_ids', 'attention_mask', 'labels']:
+                    # 对于文本相关的张量，找到填充 ID
+                    if key == 'labels':
+                        padding_value = -100
+                    else:
+                        padding_value = processor.tokenizer.pad_token_id
 
+                    # 使用 PyTorch 自带的 pad_sequence 进行填充
+                    padded_batch[key] = torch.nn.utils.rnn.pad_sequence(
+                        values, batch_first=True, padding_value=padding_value
+                    )
+                else:
+                    # 其他键（如果有的话）直接放入
+                    padded_batch[key] = values
+
+            # ================ [ 调试打印 ] ================
+            # print("\n--- collate_fn success ---")
+            # for k, v in padded_batch.items():
+            #     if isinstance(v, torch.Tensor):
+            #         print(f"Key: {k}, Shape: {v.shape}")
+            # print("--------------------------\n")
+            # ============================================
+
+            return padded_batch
+
+        except Exception as e:
+            import traceback
+            print(f"❌ collate_fn 中出错!")
+            traceback.print_exc()
+            return None
+        # ==========================================================
     args = parse_args()
 
     print("🚀 开始ShowUI-2B微调训练")
