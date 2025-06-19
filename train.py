@@ -217,7 +217,7 @@ def setup_model_and_processor(args):
             # 传入这两个关键参数，确保image_processor能正确处理不同尺寸的图片
             min_pixels=min_pixels,
             max_pixels=max_pixels,
-            size = {'shortest_edge' : min_pixels, 'longest_edge' : max_pixels}
+            size = {'shortest_edge' : 448, 'longest_edge' : 448}
         )
         print("✅ 处理器加载成功，并已设置 min/max_pixels。")
 
