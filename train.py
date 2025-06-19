@@ -51,29 +51,25 @@ class ShowUIDataset(Dataset):
         return len(self.data)
 
     # 在你的 ShowUIDataset 类中
-    # 在你的 ShowUIDataset 类中
     def __getitem__(self, idx):
         item = self.data[idx]
         image_path = "未定义"  # 初始化
 
         try:
-            # 1. 提取信息
+            # 1. 提取信息 (这部分不变)
             image_filename = item['img_url']
             image_path = os.path.join(os.path.dirname(self.data_path), 'images', image_filename)
             element = item['element'][0]
             instruction = element.get('instruction', '目标区域')
             point = element['point']
 
-            # 2. 加载图片
-            image = Image.open(image_path).convert('RGB')
-
-            # 3. 构建 messages 列表
+            # 2. 构建 messages 列表 (用于生成文本模板)
             messages = [
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": self.system_prompt},
-                        {"type": "image"},
+                        {"type": "image"},  # 这里只需要一个占位符
                         {"type": "text", "text": instruction}
                     ]
                 },
@@ -83,23 +79,39 @@ class ShowUIDataset(Dataset):
                 }
             ]
 
-            # 4. 严格遵循官方文档的“手动两步法”
+            # ================ [ 全新、最关键的修改 ] ================
+            # 严格遵循官方文档的“手动三步法”
 
-            # 第1步：生成文本字符串
+            # 步骤 A: 像官方一样，用 apply_chat_template 只生成文本部分
             text = self.processor.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=False
+                messages,
+                tokenize=False,
+                add_generation_prompt=False
             )
 
-            # 第2步：将文本和图片分别送入 processor
-            inputs = self.processor(
-                text=[text],
-                images=[image],
+            # 步骤 B: 手动模拟 process_vision_info 的核心功能
+            #   B.1 加载图片
+            image = Image.open(image_path).convert('RGB')
+            #   B.2 使用 processor 内部的 image_processor 对图片进行预处理，得到图片张量
+            #       这是我们之前所有方案都缺失的最关键一步！
+            image_inputs = self.processor.image_processor([image], return_tensors="pt")['pixel_values']
+
+            # 步骤 C: 将最终的文本和图片张量一起送入 tokenizer 进行最后处理
+            #       这里我们只用 tokenizer，因为它负责将文本和视觉占位符合并
+            inputs = self.processor.tokenizer(
+                text,
                 return_tensors="pt",
                 truncation=True,
                 max_length=self.args.model_max_length
+                # padding 在 collate_fn 中处理
             )
 
-            # 5. 后续处理
+            # 步骤 D: 将预处理好的图片张量添加到 inputs 字典中
+            inputs['pixel_values'] = image_inputs
+
+            # ================== [ 修改结束 ] ==================
+
+            # 5. 后续处理 (这部分不变)
             inputs["labels"] = inputs["input_ids"].clone()
             for key in inputs:
                 if isinstance(inputs[key], torch.Tensor) and inputs[key].dim() > 1:
@@ -108,21 +120,25 @@ class ShowUIDataset(Dataset):
             return inputs
 
         except Exception as e:
+            # 错误处理逻辑保持不变
             import traceback
-            print(f"❌ __getitem__ 中出错! 图片路径: {image_path}")
+            print(f"❌ 处理数据时出错! 尝试的图片路径: {image_path}")
             print(f"错误类型: {type(e).__name__}, 错误信息: {e}")
-            # 确保这行是激活的，以便我们看到真正的错误！
-            traceback.print_exc()
+            traceback.print_exc()  # 打印完整的堆栈，帮助我们看到底是哪一步错了
 
-            # 返回一个包含所有键的 fallback 字典
+            # 2. 返回一个包含所有必要键的、完整的 fallback 字典
+            # 创建一个虚拟的 pixel_values 张量
             dummy_pixel_values = torch.zeros((3, 448, 448), dtype=torch.float)
             dummy_input_ids = torch.zeros(100, dtype=torch.long)
+
             return {
                 "pixel_values": dummy_pixel_values,
                 "input_ids": dummy_input_ids,
                 "attention_mask": torch.ones_like(dummy_input_ids),
-                "labels": torch.full_like(dummy_input_ids, -100)
+                "labels": torch.full_like(dummy_input_ids, -100)  # 标签用-100填充
             }
+        # ================ [ 修改结束 ] ================
+
 def parse_args():
     parser = argparse.ArgumentParser(description="ShowUI-2B微调训练")
 
