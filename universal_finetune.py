@@ -97,16 +97,20 @@ class Config:
             image = Image.open(image_path).convert('RGB')
 
             # --- 步骤 2: 先处理图像，获取图像信息 ---
-            # 这是关键一步，我们提前知道图片会被转换成多少个 patch
             image_inputs_dict = processor.image_processor(images=image, return_tensors="pt")
-            num_image_patches = image_inputs_dict['pixel_values'].shape[1]  # 获取 patch 数量
+
+            if 'pixel_values' not in image_inputs_dict or image_inputs_dict['pixel_values'].ndim < 2:
+                raise ValueError("image_processor did not return a valid 'pixel_values' tensor.")
+            num_image_patches = image_inputs_dict['pixel_values'].shape[1]
 
             # --- 步骤 3: 构建包含正确数量占位符的文本 ---
-            # 我们用 <|image_pad|> * num_image_patches 来创建占位符字符串
-            image_placeholder = processor.image_pad_token * num_image_patches  # <--- 修正于此
+            # 【核心修正】我们不再尝试从 processor 对象动态获取 image_pad_token。
+            # 而是直接硬编码这个模型特定的、固定不变的特殊 token 字符串。
+            # 这是最稳妥、最不受库版本影响的方法。
+            IMAGE_PAD_TOKEN = "<|image_pad|>"
+            image_placeholder = IMAGE_PAD_TOKEN * num_image_patches
 
             # 使用 f-string 构建最终的输入文本，手动模拟聊天模板
-            # 格式: <|im_start|>role\ncontent<|im_end|>
             user_content = f"{system_prompt}{image_placeholder}{instruction}"
             assistant_content = point
 
@@ -118,25 +122,18 @@ class Config:
             # --- 步骤 4: 分词文本，并组合所有输入 ---
             text_inputs = processor.tokenizer(text, return_tensors="pt", truncation=True,
                                               max_length=cfg.MODEL_MAX_LENGTH)
-
-            # 将图像张量和文本张量合并
             inputs = {**text_inputs, **image_inputs_dict}
 
             # --- 步骤 5: 创建标签 ---
-            # 这是一个简化的标签创建，对于更复杂的场景可能需要更精细的处理
-            # 找到 assistant 部分的起始位置
-            prompt_tokens = processor.tokenizer(
-                f"<|im_start|>user\n{user_content}<|im_end|>\n<|im_start|>assistant\n",
-                return_tensors="pt"
-            ).input_ids.shape[1]
+            # 计算 prompt 部分的 token 长度，以便在计算 loss 时忽略它们
+            prompt_text = f"<|im_start|>user\n{user_content}<|im_end|>\n<|im_start|>assistant\n"
+            prompt_tokens = processor.tokenizer(prompt_text, return_tensors="pt").input_ids.shape[1]
 
             labels = inputs["input_ids"].clone()
-            # 将 prompt 部分的标签设为-100，这样模型就不会计算这部分的loss
             labels[:, :prompt_tokens] = -100
             inputs["labels"] = labels
 
             return inputs
-
         # --- 适用于纯文本模型的逻辑 (例如: Llama, Mistral) ---
         elif cfg.MODEL_TYPE == 'text':
             # 假设你的JSON是 { "instruction": "...", "input": "...", "output": "..." } 格式
