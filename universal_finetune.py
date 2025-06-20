@@ -103,7 +103,7 @@ class Config:
 
             # --- 步骤 3: 构建包含正确数量占位符的文本 ---
             # 我们用 <|image_pad|> * num_image_patches 来创建占位符字符串
-            image_placeholder = processor.tokenizer.image_pad_token * num_image_patches
+            image_placeholder = processor.image_pad_token * num_image_patches  # <--- 修正于此
 
             # 使用 f-string 构建最终的输入文本，手动模拟聊天模板
             # 格式: <|im_start|>role\ncontent<|im_end|>
