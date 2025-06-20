@@ -171,6 +171,9 @@ class UniversalDataset(Dataset):
 # ========================================================================================
 # 3. 训练器 (通用，已修正模型加载逻辑)
 # ========================================================================================
+# ========================================================================================
+# 3. 训练器 (通用，已修正 NameError)
+# ========================================================================================
 class Trainer:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -194,21 +197,14 @@ class Trainer:
         """
         print(f"🧠 根据 MODEL_TYPE='{self.cfg.MODEL_TYPE}' 和 MODEL_ID='{self.cfg.MODEL_ID}' 判断模型类...")
 
-        # 对于多模态模型，需要指定具体的类
         if self.cfg.MODEL_TYPE == 'vision':
             if "qwen2-vl" in self.cfg.MODEL_ID.lower() or "showui" in self.cfg.MODEL_ID.lower():
                 from transformers import Qwen2VLForConditionalGeneration
                 print(" -> 识别为 Qwen2VL 模型，使用 Qwen2VLForConditionalGeneration。")
                 return Qwen2VLForConditionalGeneration
-            # 在这里可以为其他视觉模型添加 elif 分支
-            # elif "llava" in self.cfg.MODEL_ID.lower():
-            #     from transformers import LlavaForConditionalGeneration
-            #     print(" -> 识别为 Llava 模型，使用 LlavaForConditionalGeneration。")
-            #     return LlavaForConditionalGeneration
             else:
                 raise ValueError(f"未知的视觉模型类型: {self.cfg.MODEL_ID}。请在 _get_model_class 中添加支持。")
 
-        # 对于纯文本模型，AutoModelForCausalLM 通常是安全的
         elif self.cfg.MODEL_TYPE == 'text':
             print(" -> 识别为纯文本模型，使用 AutoModelForCausalLM。")
             return AutoModelForCausalLM
@@ -220,11 +216,10 @@ class Trainer:
         """
         自动查找所有可应用LoRA的线性层名称。
         """
-        import bitsandbytes as bnb # 在方法内部导入，确保bnb可用
+        import bitsandbytes as bnb  # 在方法内部导入，确保bnb可用
 
         print("🎯 正在自动检测LoRA目标模块...")
         lora_module_names = set()
-        # 通用的、可能成为LoRA目标的模块名
         supported_lora_modules = [
             "q_proj", "k_proj", "v_proj", "o_proj",
             "gate_proj", "up_proj", "down_proj",
@@ -270,7 +265,6 @@ class Trainer:
             if hasattr(processor, 'tokenizer'):  # for vision model
                 processor.tokenizer.chat_template = self.cfg.CHAT_TEMPLATE
 
-        # 【核心修正】使用 _get_model_class 获取正确的模型类
         model_class = self._get_model_class()
         model = model_class.from_pretrained(
             model_path, torch_dtype=torch_dtype, quantization_config=bnb_config,
@@ -309,7 +303,7 @@ class Trainer:
             elif key in ['input_ids', 'attention_mask', 'labels']:
                 tokenizer = self.processor.tokenizer if hasattr(self.processor, 'tokenizer') else self.processor
                 padding_value = -100 if key == 'labels' else tokenizer.pad_token_id
-                if padding_value is None: padding_value = 0  # Fallback for tokenizers without a pad_token
+                if padding_value is None: padding_value = 0
 
                 padded_batch[key] = torch.nn.utils.rnn.pad_sequence(values, batch_first=True,
                                                                     padding_value=padding_value)
@@ -349,7 +343,7 @@ class Trainer:
                     print(f"\n⚠️ 训练步骤出错: {e}")
                     import traceback
                     traceback.print_exc()
-                    optimizer.zero_grad()  # 清空梯度以防万一
+                    optimizer.zero_grad()
                     continue
 
         print("🎉 训练完成!")
@@ -358,33 +352,6 @@ class Trainer:
         self.model.save_pretrained(save_path)
         self.processor.save_pretrained(save_path)
         print(f"💾 模型和处理器已保存到 {save_path}")
-
-    def _find_lora_target_modules(self, model):
-        """
-        自动查找所有可应用LoRA的线性层名称。
-        """
-        print("🎯 正在自动检测LoRA目标模块...")
-        lora_module_names = set()
-        # 我们只关心常见的Attention和MLP层名，以提高稳定性
-        # 对于Qwen2系列，常见的线性层在qkv_proj, o_proj, up_proj, gate_proj, down_proj
-        supported_lora_modules = [
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
-            "qkv_proj"
-        ]
-
-        for name, module in model.named_modules():
-            if isinstance(module, (torch.nn.Linear, bnb.nn.Linear4bit, bnb.nn.Linear8bitLt)):
-                module_name = name.split('.')[-1]
-                if module_name in supported_lora_modules:
-                    lora_module_names.add(module_name)
-
-        # 通常不建议对视觉模型的输出投影层和语言模型的输出层应用LoRA
-        if 'lm_head' in lora_module_names:
-            lora_module_names.remove('lm_head')
-
-        print(f"✅ 自动查找到的LoRA目标模块: {list(lora_module_names)}")
-        return list(lora_module_names)
 
 
 # ========================================================================================
