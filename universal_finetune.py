@@ -88,7 +88,7 @@ class Config:
     def get_model_inputs(item, processor, cfg):
         # --- 适用于 ShowUI-2B / Qwen-VL 的逻辑 ---
         if cfg.MODEL_TYPE == 'vision':
-            # --- 步骤 1: 准备文本和图像 ---
+            # --- 步骤 1: 准备原始数据 ---
             image_path = os.path.join(cfg.DATASET_DIR, os.path.dirname(cfg.TRAIN_JSON), cfg.IMAGE_SUBDIR,
                                       item['img_url'])
             instruction = item['element'][0]['instruction']
@@ -96,57 +96,51 @@ class Config:
             system_prompt = "Based on the screenshot of the page, I give a text description and you give its corresponding location..."
             image = Image.open(image_path).convert('RGB')
 
-            # --- 步骤 2: 处理图像，获取 patch 数量 ---
-            image_inputs_dict = processor.image_processor(images=image, return_tensors="pt")
-            num_image_patches = image_inputs_dict['pixel_values'].shape[1]
+            # --- 步骤 2: 构建 messages 列表 ---
+            # 这是最标准的输入格式，只包含一个图像占位符
+            messages = [
+                {"role": "user", "content": [{"type": "text", "text": system_prompt}, {"type": "image"},
+                                             {"type": "text", "text": instruction}]},
+                {"role": "assistant", "content": point}
+            ]
 
-            # --- 步骤 3: 【核心修正】手动、精确地处理文本截断 ---
-            IMAGE_PAD_TOKEN = "<|image_pad|>"
+            # --- 步骤 3: 【核心修正】让 processor 一次性处理所有信息 ---
+            # 我们不再手动构建文本或计算patch数量。
+            # 我们将文本部分和图像部分都交给 processor，让它来处理对齐。
 
-            # 定义所有固定文本部分
-            im_start, im_end = "<|im_start|>", "<|im_end|>\n"
-            role_user, role_assistant = "user\n", "assistant\n"
-
-            # 计算非指令文本部分的 token 数量 (系统提示 + 所有特殊符号)
-            # 注意：这里我们不包含 instruction，因为它是我们要截断的对象
-            fixed_text_prompt = f"{im_start}{role_user}{system_prompt}{im_end}{im_start}{role_assistant}"
-            fixed_tokens_len = len(processor.tokenizer(fixed_text_prompt).input_ids)
-
-            # 计算可用于 instruction 和 answer 的最大 token 长度
-            # 总长度 = 图片patch数 + 固定文本长度 + 指令长度 + 回答长度
-            # 我们要确保这个总长度 <= MODEL_MAX_LENGTH
-            max_len_for_instr_ans = cfg.MODEL_MAX_LENGTH - num_image_patches - fixed_tokens_len
-
-            # 分词指令和回答
-            instr_tokens = processor.tokenizer(instruction).input_ids
-            ans_tokens = processor.tokenizer(point + im_end).input_ids
-
-            # 如果指令+回答超长，则优先截断指令
-            if len(instr_tokens) + len(ans_tokens) > max_len_for_instr_ans:
-                max_len_for_instr = max_len_for_instr_ans - len(ans_tokens)
-                instr_tokens = instr_tokens[:max_len_for_instr]  # 从末尾截断指令
-
-            # 将截断后的 token 转回字符串
-            truncated_instruction = processor.tokenizer.decode(instr_tokens)
-
-            # --- 步骤 4: 构建最终的、不会超长的文本 ---
-            image_placeholder = IMAGE_PAD_TOKEN * num_image_patches
-            user_content = f"{system_prompt}{image_placeholder}{truncated_instruction}"
-
-            final_text = (
-                f"{im_start}{role_user}{user_content}{im_end}"
-                f"{im_start}{role_assistant}{point}{im_end}"
+            # (A) 先用 apply_chat_template 生成包含占位符的纯文本
+            # 这是官方推荐的、处理对话模板的标准方式
+            text = processor.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False
             )
 
-            # --- 步骤 5: 分词与组合，此时不再需要截断 ---
-            inputs = processor.tokenizer(final_text, return_tensors="pt", max_length=None, truncation=False)
-            inputs.update(image_inputs_dict)
+            # (B) 将文本和图像一起送入 processor 进行最终处理
+            # 这是最关键的一步。processor的__call__方法被设计用来处理这种情况。
+            # 它会看到文本中的 <|image_pad|>，并根据传入的 images 参数，
+            # 自动将该占位符替换为正确数量的特殊 token ID。
+            inputs = processor(
+                text=text,
+                images=image,
+                return_tensors="pt",
+                truncation=True,  # 让 processor 自己处理截断
+                max_length=cfg.MODEL_MAX_LENGTH
+            )
 
-            # --- 步骤 6: 创建标签 ---
-            prompt_text = f"{im_start}{role_user}{user_content}{im_end}{im_start}{role_assistant}"
-            prompt_tokens_len = len(processor.tokenizer(prompt_text).input_ids)
+            # --- 步骤 4: 创建标签 ---
+            # 我们的标签创建逻辑需要适应 processor 的输出
+            # 我们需要找到 assistant 内容在 token 序列中的起始位置
+
+            # (A) 找到 "assistant\n" 这个标志在文本中的位置
+            assistant_prompt = "<|im_start|>assistant\n"
+            # 找到 assistant 回答的起始 token 位置
+            # 我们通过分词不带回答的 prompt 来确定
+            prompt_only_text = text.split(assistant_prompt)[0] + assistant_prompt
+            prompt_tokens_len = len(processor.tokenizer(prompt_only_text).input_ids)
 
             labels = inputs["input_ids"].clone()
+            # 将 prompt 部分的标签设为 -100
             labels[:, :prompt_tokens_len] = -100
             inputs["labels"] = labels
 
