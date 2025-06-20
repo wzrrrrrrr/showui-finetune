@@ -48,7 +48,7 @@ class Config:
     PROCESSOR_KWARGS = {
         "min_pixels": 256 * 28 * 28,
         "max_pixels": 1344 * 28 * 28,
-        "size": {'shortest_edge': 448, 'longest_edge': 448},
+        "size": {'shortest_edge': 1, 'longest_edge': 99999999},
         "uigraph_train": True,  # ShowUI 特有参数
     }
 
