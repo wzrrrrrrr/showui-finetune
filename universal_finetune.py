@@ -96,41 +96,58 @@ class Config:
             system_prompt = "Based on the screenshot of the page, I give a text description and you give its corresponding location..."
             image = Image.open(image_path).convert('RGB')
 
-            # --- 步骤 2: 先处理图像，获取图像信息 ---
+            # --- 步骤 2: 处理图像，获取 patch 数量 ---
             image_inputs_dict = processor.image_processor(images=image, return_tensors="pt")
-
-            if 'pixel_values' not in image_inputs_dict or image_inputs_dict['pixel_values'].ndim < 2:
-                raise ValueError("image_processor did not return a valid 'pixel_values' tensor.")
             num_image_patches = image_inputs_dict['pixel_values'].shape[1]
 
-            # --- 步骤 3: 构建包含正确数量占位符的文本 ---
-            # 【核心修正】我们不再尝试从 processor 对象动态获取 image_pad_token。
-            # 而是直接硬编码这个模型特定的、固定不变的特殊 token 字符串。
-            # 这是最稳妥、最不受库版本影响的方法。
+            # --- 步骤 3: 【核心修正】手动、精确地处理文本截断 ---
             IMAGE_PAD_TOKEN = "<|image_pad|>"
+
+            # 定义所有固定文本部分
+            im_start, im_end = "<|im_start|>", "<|im_end|>\n"
+            role_user, role_assistant = "user\n", "assistant\n"
+
+            # 计算非指令文本部分的 token 数量 (系统提示 + 所有特殊符号)
+            # 注意：这里我们不包含 instruction，因为它是我们要截断的对象
+            fixed_text_prompt = f"{im_start}{role_user}{system_prompt}{im_end}{im_start}{role_assistant}"
+            fixed_tokens_len = len(processor.tokenizer(fixed_text_prompt).input_ids)
+
+            # 计算可用于 instruction 和 answer 的最大 token 长度
+            # 总长度 = 图片patch数 + 固定文本长度 + 指令长度 + 回答长度
+            # 我们要确保这个总长度 <= MODEL_MAX_LENGTH
+            max_len_for_instr_ans = cfg.MODEL_MAX_LENGTH - num_image_patches - fixed_tokens_len
+
+            # 分词指令和回答
+            instr_tokens = processor.tokenizer(instruction).input_ids
+            ans_tokens = processor.tokenizer(point + im_end).input_ids
+
+            # 如果指令+回答超长，则优先截断指令
+            if len(instr_tokens) + len(ans_tokens) > max_len_for_instr_ans:
+                max_len_for_instr = max_len_for_instr_ans - len(ans_tokens)
+                instr_tokens = instr_tokens[:max_len_for_instr]  # 从末尾截断指令
+
+            # 将截断后的 token 转回字符串
+            truncated_instruction = processor.tokenizer.decode(instr_tokens)
+
+            # --- 步骤 4: 构建最终的、不会超长的文本 ---
             image_placeholder = IMAGE_PAD_TOKEN * num_image_patches
+            user_content = f"{system_prompt}{image_placeholder}{truncated_instruction}"
 
-            # 使用 f-string 构建最终的输入文本，手动模拟聊天模板
-            user_content = f"{system_prompt}{image_placeholder}{instruction}"
-            assistant_content = point
-
-            text = (
-                f"<|im_start|>user\n{user_content}<|im_end|>\n"
-                f"<|im_start|>assistant\n{assistant_content}<|im_end|>"
+            final_text = (
+                f"{im_start}{role_user}{user_content}{im_end}"
+                f"{im_start}{role_assistant}{point}{im_end}"
             )
 
-            # --- 步骤 4: 分词文本，并组合所有输入 ---
-            text_inputs = processor.tokenizer(text, return_tensors="pt", truncation=True,
-                                              max_length=cfg.MODEL_MAX_LENGTH)
-            inputs = {**text_inputs, **image_inputs_dict}
+            # --- 步骤 5: 分词与组合，此时不再需要截断 ---
+            inputs = processor.tokenizer(final_text, return_tensors="pt", max_length=None, truncation=False)
+            inputs.update(image_inputs_dict)
 
-            # --- 步骤 5: 创建标签 ---
-            # 计算 prompt 部分的 token 长度，以便在计算 loss 时忽略它们
-            prompt_text = f"<|im_start|>user\n{user_content}<|im_end|>\n<|im_start|>assistant\n"
-            prompt_tokens = processor.tokenizer(prompt_text, return_tensors="pt").input_ids.shape[1]
+            # --- 步骤 6: 创建标签 ---
+            prompt_text = f"{im_start}{role_user}{user_content}{im_end}{im_start}{role_assistant}"
+            prompt_tokens_len = len(processor.tokenizer(prompt_text).input_ids)
 
             labels = inputs["input_ids"].clone()
-            labels[:, :prompt_tokens] = -100
+            labels[:, :prompt_tokens_len] = -100
             inputs["labels"] = labels
 
             return inputs
