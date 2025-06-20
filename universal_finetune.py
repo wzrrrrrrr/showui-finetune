@@ -61,7 +61,7 @@ class Config:
     IMAGE_SUBDIR = "images"
     # 如果为None，则依赖processor自动加载。如果是字符串，则强制设置。
     # 对于ShowUI-2B，最好手动设置以确保一致性。
-    CHAT_TEMPLATE = "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}<|im_start|>{{ message['role'] }}\n{% if message['content'] is string %}{{ message['content'] }}<|im_end|>\n{% else %}{% for content in message['content'] %}{% if content['type'] == 'image' or 'image' in content or 'image_url' in content %}{% set image_count.value = image_count.value + 1 %}{% if add_vision_id %}Picture {{ image_count.value }}: {% endif %}<|vision_start|><|image_pad|><|vision_end|>{% elif content['type'] == 'video' or 'video' in content %}{% set video_count.value = video_count.value + 1 %}{% if add_vision_id %}Video {{ video_count.value }}: {% endif %}<|vision_start|><|video_pad|><|vision_end|>{% elif 'text' in content %}{{ content['text'] }}{% endif %}{% endfor %}<|im_end|>\n{% endif %}{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
+    CHAT_TEMPLATE = None
 
     # --- [侦查步骤4: LoRA靶心] ---
     # LoRA目标模块，通常需要根据模型检查来确定
@@ -168,6 +168,9 @@ class UniversalDataset(Dataset):
 # ========================================================================================
 # 3. 训练器 (通用，无需修改)
 # ========================================================================================
+# ========================================================================================
+# 3. 训练器 (通用，已修正模型加载逻辑)
+# ========================================================================================
 class Trainer:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -176,12 +179,67 @@ class Trainer:
         self.model, self.processor = self._setup_model_and_processor()
 
     def _print_config(self):
-        print("=" * 60)
+        """打印所有配置参数，方便调试和记录。"""
+        print("=" * 80)
         print("🚀 Universal Finetuner: Configuration Overview 🚀")
-        print("=" * 60)
+        print("=" * 80)
         config_dict = {k: v for k, v in self.cfg.__dict__.items() if not k.startswith('__') and not callable(v)}
-        pprint.pprint(config_dict, indent=2, width=100)
-        print("=" * 60)
+        pprint.pprint(config_dict, indent=2, width=120)
+        print("=" * 80)
+
+    def _get_model_class(self):
+        """
+        根据Config智能判断并返回正确的模型类。
+        这是确保能加载多模态模型的关键。
+        """
+        print(f"🧠 根据 MODEL_TYPE='{self.cfg.MODEL_TYPE}' 和 MODEL_ID='{self.cfg.MODEL_ID}' 判断模型类...")
+
+        # 对于多模态模型，需要指定具体的类
+        if self.cfg.MODEL_TYPE == 'vision':
+            if "qwen2-vl" in self.cfg.MODEL_ID.lower() or "showui" in self.cfg.MODEL_ID.lower():
+                from transformers import Qwen2VLForConditionalGeneration
+                print(" -> 识别为 Qwen2VL 模型，使用 Qwen2VLForConditionalGeneration。")
+                return Qwen2VLForConditionalGeneration
+            # 在这里可以为其他视觉模型添加 elif 分支
+            # elif "llava" in self.cfg.MODEL_ID.lower():
+            #     from transformers import LlavaForConditionalGeneration
+            #     print(" -> 识别为 Llava 模型，使用 LlavaForConditionalGeneration。")
+            #     return LlavaForConditionalGeneration
+            else:
+                raise ValueError(f"未知的视觉模型类型: {self.cfg.MODEL_ID}。请在 _get_model_class 中添加支持。")
+
+        # 对于纯文本模型，AutoModelForCausalLM 通常是安全的
+        elif self.cfg.MODEL_TYPE == 'text':
+            print(" -> 识别为纯文本模型，使用 AutoModelForCausalLM。")
+            return AutoModelForCausalLM
+
+        else:
+            raise ValueError(f"不支持的 MODEL_TYPE: {self.cfg.MODEL_TYPE}")
+
+    def _find_lora_target_modules(self, model):
+        """
+        自动查找所有可应用LoRA的线性层名称。
+        """
+        print("🎯 正在自动检测LoRA目标模块...")
+        lora_module_names = set()
+        # 通用的、可能成为LoRA目标的模块名
+        supported_lora_modules = [
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+            "qkv_proj"
+        ]
+
+        for name, module in model.named_modules():
+            if isinstance(module, (torch.nn.Linear, bnb.nn.Linear4bit, bnb.nn.Linear8bitLt)):
+                module_name = name.split('.')[-1]
+                if module_name in supported_lora_modules:
+                    lora_module_names.add(module_name)
+
+        if 'lm_head' in lora_module_names:
+            lora_module_names.remove('lm_head')
+
+        print(f"✅ 自动查找到的LoRA目标模块: {list(lora_module_names)}")
+        return list(lora_module_names)
 
     def _setup_model_and_processor(self):
         print("🔧 正在设置模型和处理器...")
@@ -193,8 +251,8 @@ class Trainer:
                                             bnb_4bit_use_double_quant=True, bnb_4bit_quant_type="nf4")
 
         model_path = os.path.join(self.cfg.LOCAL_MODEL_DIR, self.cfg.MODEL_ID.split('/')[-1])
-        if not os.path.exists(model_path):
-            print(f"⚠️ 本地路径 {model_path} 不存在，将尝试从 Hub 加载 {self.cfg.MODEL_ID}")
+        if not os.path.isdir(model_path):
+            print(f"⚠️ 本地路径 {model_path} 不存在或不是一个目录，将尝试从 Hub 加载 {self.cfg.MODEL_ID}")
             model_path = self.cfg.MODEL_ID
 
         if self.cfg.MODEL_TYPE == 'vision':
@@ -210,7 +268,9 @@ class Trainer:
             if hasattr(processor, 'tokenizer'):  # for vision model
                 processor.tokenizer.chat_template = self.cfg.CHAT_TEMPLATE
 
-        model = AutoModelForCausalLM.from_pretrained(
+        # 【核心修正】使用 _get_model_class 获取正确的模型类
+        model_class = self._get_model_class()
+        model = model_class.from_pretrained(
             model_path, torch_dtype=torch_dtype, quantization_config=bnb_config,
             trust_remote_code=self.cfg.TRUST_REMOTE_CODE, device_map="auto", low_cpu_mem_usage=True
         )
@@ -218,23 +278,18 @@ class Trainer:
         if self.cfg.USE_QLORA:
             model = prepare_model_for_kbit_training(model)
 
-            # ====================[ LoRA 自动检测 ]====================
-            # 如果Config中没有指定，则自动检测
             if not self.cfg.LORA_TARGET_MODULES:
                 target_modules = self._find_lora_target_modules(model)
             else:
                 print(f"🎯 使用Config中指定的LoRA目标模块: {self.cfg.LORA_TARGET_MODULES}")
                 target_modules = self.cfg.LORA_TARGET_MODULES
-            # ========================================================
 
             lora_config = LoraConfig(
                 r=self.cfg.LORA_R, lora_alpha=self.cfg.LORA_ALPHA,
-                target_modules=target_modules,  # <--- 使用检测到的或指定的模块
+                target_modules=target_modules,
                 lora_dropout=self.cfg.LORA_DROPOUT, bias="none", task_type="CAUSAL_LM"
             )
             model = get_peft_model(model, lora_config)
-
-        if self.cfg.USE_QLORA:
             model.print_trainable_parameters()
 
         return model, processor
@@ -252,6 +307,8 @@ class Trainer:
             elif key in ['input_ids', 'attention_mask', 'labels']:
                 tokenizer = self.processor.tokenizer if hasattr(self.processor, 'tokenizer') else self.processor
                 padding_value = -100 if key == 'labels' else tokenizer.pad_token_id
+                if padding_value is None: padding_value = 0  # Fallback for tokenizers without a pad_token
+
                 padded_batch[key] = torch.nn.utils.rnn.pad_sequence(values, batch_first=True,
                                                                     padding_value=padding_value)
         return padded_batch
@@ -275,19 +332,27 @@ class Trainer:
 
                 batch = {k: v.to(self.device) for k, v in batch.items() if isinstance(v, torch.Tensor)}
 
-                outputs = self.model(**batch)
-                loss = outputs.loss / self.cfg.GRAD_ACCUMULATION_STEPS
-                loss.backward()
+                try:
+                    outputs = self.model(**batch)
+                    loss = outputs.loss / self.cfg.GRAD_ACCUMULATION_STEPS
+                    loss.backward()
 
-                if (i + 1) % self.cfg.GRAD_ACCUMULATION_STEPS == 0:
-                    optimizer.step()
-                    scheduler.step()
-                    optimizer.zero_grad()
+                    if (i + 1) % self.cfg.GRAD_ACCUMULATION_STEPS == 0:
+                        optimizer.step()
+                        scheduler.step()
+                        optimizer.zero_grad()
 
-                progress_bar.set_postfix({'loss': f'{loss.item() * self.cfg.GRAD_ACCUMULATION_STEPS:.4f}'})
+                    progress_bar.set_postfix({'loss': f'{loss.item() * self.cfg.GRAD_ACCUMULATION_STEPS:.4f}'})
+                except Exception as e:
+                    print(f"\n⚠️ 训练步骤出错: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    optimizer.zero_grad()  # 清空梯度以防万一
+                    continue
 
         print("🎉 训练完成!")
         save_path = f"./logs/{self.cfg.EXP_ID}"
+        os.makedirs(save_path, exist_ok=True)
         self.model.save_pretrained(save_path)
         self.processor.save_pretrained(save_path)
         print(f"💾 模型和处理器已保存到 {save_path}")
