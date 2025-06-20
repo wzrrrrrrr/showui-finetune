@@ -220,6 +220,8 @@ class Trainer:
         """
         自动查找所有可应用LoRA的线性层名称。
         """
+        import bitsandbytes as bnb # 在方法内部导入，确保bnb可用
+
         print("🎯 正在自动检测LoRA目标模块...")
         lora_module_names = set()
         # 通用的、可能成为LoRA目标的模块名
